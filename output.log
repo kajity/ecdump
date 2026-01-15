@@ -1,0 +1,572 @@
+[22:59:06.990307 [34mDEBUG[0m] Default network interface found: eth0
+[22:59:06.992032 [32mINFO[0m] Using network interface: eth0
+[22:59:10.815323 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0d, 10, 07, 00, 00, 00, 00, 00, 01, 00, 00, 00, 00, 00, 00]
+[22:59:10.815641 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 29
+[22:59:10.815923 [32mINFO[0m] EtherCAT Packet - Length: 13, Type: 1
+[22:59:10.816147 [32mINFO[0m] EtherCAT Datagram - Command: 07, Index: 0, Address: 00000000, Length: 1, WKC: 0
+[22:59:10.816667 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.818865 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 08, 01, 00, 00, 20, 01, 02, 00, 00, 00, 11, 00, 00, 00]
+[22:59:10.819288 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.819713 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.820114 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 1, Address: 01200000, Length: 2, WKC: 0
+[22:59:10.820501 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.821220 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 02, 00, 00, 00, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.821570 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.821851 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.822144 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 2, Address: 06000000, Length: 16, WKC: 0
+[22:59:10.822615 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.823075 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 03, 00, 00, 10, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.823665 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.823903 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.824324 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 3, Address: 06100000, Length: 16, WKC: 0
+[22:59:10.824747 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.825359 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 04, 00, 00, 20, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.825627 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.826169 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.826671 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 4, Address: 06200000, Length: 16, WKC: 0
+[22:59:10.827014 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.827805 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 05, 00, 00, 30, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.828255 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.828615 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.828890 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 5, Address: 06300000, Length: 16, WKC: 0
+[22:59:10.829365 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.829897 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 06, 00, 00, 40, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.830153 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.830499 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.830858 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 6, Address: 06400000, Length: 16, WKC: 0
+[22:59:10.831309 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.831806 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 07, 00, 00, 50, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.832255 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.832621 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.833056 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 7, Address: 06500000, Length: 16, WKC: 0
+[22:59:10.833475 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.833953 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 08, 00, 00, 60, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.834231 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.834465 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.834678 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 8, Address: 06600000, Length: 16, WKC: 0
+[22:59:10.835092 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.835543 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 09, 00, 00, 70, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.835897 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.836657 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.836935 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 9, Address: 06700000, Length: 16, WKC: 0
+[22:59:10.837524 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.838369 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 0a, 00, 00, 80, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.839477 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.840034 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.840531 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 10, Address: 06800000, Length: 16, WKC: 0
+[22:59:10.841088 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.842202 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 0b, 00, 00, 90, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.843126 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.844130 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.844762 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 11, Address: 06900000, Length: 16, WKC: 0
+[22:59:10.845163 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.845847 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 0c, 00, 00, a0, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.846228 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.846750 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.847205 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 12, Address: 06a00000, Length: 16, WKC: 0
+[22:59:10.847591 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.848217 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 0d, 00, 00, b0, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.848991 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.849313 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.849684 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 13, Address: 06b00000, Length: 16, WKC: 0
+[22:59:10.849960 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.850514 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 0e, 00, 00, c0, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.850885 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.851285 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.851565 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 14, Address: 06c00000, Length: 16, WKC: 0
+[22:59:10.851909 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.852433 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 0f, 00, 00, d0, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.852804 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.853315 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.853607 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 15, Address: 06d00000, Length: 16, WKC: 0
+[22:59:10.854108 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.854581 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 10, 00, 00, e0, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.855033 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.855303 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.855619 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 16, Address: 06e00000, Length: 16, WKC: 0
+[22:59:10.856130 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.856646 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 1c, 10, 08, 11, 00, 00, f0, 06, 10, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.857020 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 44
+[22:59:10.857479 [32mINFO[0m] EtherCAT Packet - Length: 28, Type: 1
+[22:59:10.857825 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 17, Address: 06f00000, Length: 16, WKC: 0
+[22:59:10.858264 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.858968 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 12, 00, 00, 00, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.859381 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.859629 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.859974 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 18, Address: 08000000, Length: 8, WKC: 0
+[22:59:10.860438 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.860965 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 13, 00, 00, 08, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.861304 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.861742 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.861966 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 19, Address: 08080000, Length: 8, WKC: 0
+[22:59:10.862260 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.862887 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 14, 00, 00, 10, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.863245 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.863512 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.863923 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 20, Address: 08100000, Length: 8, WKC: 0
+[22:59:10.864411 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.864942 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 15, 00, 00, 18, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.865631 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.866359 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.866781 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 21, Address: 08180000, Length: 8, WKC: 0
+[22:59:10.867364 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.867896 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 16, 00, 00, 20, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.868652 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.868892 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.869327 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 22, Address: 08200000, Length: 8, WKC: 0
+[22:59:10.869720 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.870194 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 17, 00, 00, 28, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.870437 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.870675 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.871082 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 23, Address: 08280000, Length: 8, WKC: 0
+[22:59:10.871497 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.871934 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 18, 00, 00, 30, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.872306 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.872837 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.873197 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 24, Address: 08300000, Length: 8, WKC: 0
+[22:59:10.873547 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.874231 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 19, 00, 00, 38, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.874583 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.874799 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.875207 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 25, Address: 08380000, Length: 8, WKC: 0
+[22:59:10.875629 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.876118 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 1a, 00, 00, 40, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.876774 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.877049 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.877404 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 26, Address: 08400000, Length: 8, WKC: 0
+[22:59:10.877684 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.878274 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 1b, 00, 00, 48, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.878705 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.879199 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.879425 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 27, Address: 08480000, Length: 8, WKC: 0
+[22:59:10.879884 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.880375 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 1c, 00, 00, 50, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.880787 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.881051 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.881376 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 28, Address: 08500000, Length: 8, WKC: 0
+[22:59:10.881769 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.882305 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 1d, 00, 00, 58, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.882703 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.882967 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.883181 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 29, Address: 08580000, Length: 8, WKC: 0
+[22:59:10.883548 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.884135 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 1e, 00, 00, 60, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.884907 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.885457 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.886015 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 30, Address: 08600000, Length: 8, WKC: 0
+[22:59:10.886363 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.887413 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 1f, 00, 00, 68, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.887777 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.888222 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.888459 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 31, Address: 08680000, Length: 8, WKC: 0
+[22:59:10.888713 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.889423 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 20, 00, 00, 70, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.889787 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.889966 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.890142 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 32, Address: 08700000, Length: 8, WKC: 0
+[22:59:10.890528 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.891136 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 21, 00, 00, 78, 08, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.891590 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.891832 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.892094 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 33, Address: 08780000, Length: 8, WKC: 0
+[22:59:10.892714 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.893401 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0d, 10, 08, 22, 00, 00, 80, 09, 01, 00, 00, 00, 00, 00, 00]
+[22:59:10.893661 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 29
+[22:59:10.893868 [32mINFO[0m] EtherCAT Packet - Length: 13, Type: 1
+[22:59:10.894149 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 34, Address: 09800000, Length: 1, WKC: 0
+[22:59:10.894691 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.895332 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 23, 00, 00, 10, 09, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.895798 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.896098 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.896332 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 35, Address: 09100000, Length: 8, WKC: 0
+[22:59:10.896580 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.896961 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 14, 10, 08, 24, 00, 00, 20, 09, 08, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.897412 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 36
+[22:59:10.897618 [32mINFO[0m] EtherCAT Packet - Length: 20, Type: 1
+[22:59:10.897836 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 36, Address: 09200000, Length: 8, WKC: 0
+[22:59:10.898198 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.898394 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 10, 10, 08, 25, 00, 00, 28, 09, 04, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.898927 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 32
+[22:59:10.899454 [32mINFO[0m] EtherCAT Packet - Length: 16, Type: 1
+[22:59:10.899870 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 37, Address: 09280000, Length: 4, WKC: 0
+[22:59:10.900138 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.900366 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 10, 10, 08, 26, 00, 00, 2c, 09, 04, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.900817 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 32
+[22:59:10.901041 [32mINFO[0m] EtherCAT Packet - Length: 16, Type: 1
+[22:59:10.901225 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 38, Address: 092c0000, Length: 4, WKC: 0
+[22:59:10.901731 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.902184 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0d, 10, 08, 27, 00, 00, 81, 09, 01, 00, 00, 00, 00, 00, 00]
+[22:59:10.902404 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 29
+[22:59:10.902593 [32mINFO[0m] EtherCAT Packet - Length: 13, Type: 1
+[22:59:10.902790 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 39, Address: 09810000, Length: 1, WKC: 0
+[22:59:10.903212 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.903594 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 10, 10, 08, 28, 00, 00, 90, 09, 04, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.903782 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 32
+[22:59:10.904207 [32mINFO[0m] EtherCAT Packet - Length: 16, Type: 1
+[22:59:10.904521 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 40, Address: 09900000, Length: 4, WKC: 0
+[22:59:10.904788 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.905108 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 10, 10, 08, 29, 00, 00, a0, 09, 04, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.905346 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 32
+[22:59:10.905802 [32mINFO[0m] EtherCAT Packet - Length: 16, Type: 1
+[22:59:10.906038 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 41, Address: 09a00000, Length: 4, WKC: 0
+[22:59:10.906298 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.907756 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 10, 10, 08, 2a, 00, 00, a4, 09, 04, 00, 00, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.908099 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 32
+[22:59:10.908807 [32mINFO[0m] EtherCAT Packet - Length: 16, Type: 1
+[22:59:10.909167 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 42, Address: 09a40000, Length: 4, WKC: 0
+[22:59:10.909506 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.910377 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 08, 2b, 00, 00, 34, 09, 02, 00, 00, 00, 00, 0c, 00, 00]
+[22:59:10.910735 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.911146 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.911392 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 43, Address: 09340000, Length: 2, WKC: 0
+[22:59:10.911906 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.912211 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 08, 2c, 00, 00, 30, 09, 02, 00, 00, 00, 00, 10, 00, 00]
+[22:59:10.912926 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.913280 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.914003 [32mINFO[0m] EtherCAT Datagram - Command: 08, Index: 44, Address: 09300000, Length: 2, WKC: 0
+[22:59:10.914666 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.915526 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 02, 2d, 00, 00, 10, 00, 02, 00, 00, 00, 00, 10, 00, 00]
+[22:59:10.916446 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.916911 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.917155 [32mINFO[0m] EtherCAT Datagram - Command: 02, Index: 45, Address: 00100000, Length: 2, WKC: 0
+[22:59:10.918242 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.918890 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 2e, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.919295 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.920022 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.920569 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 46, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.921256 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.923849 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 2f, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.924551 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.925615 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.926633 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 47, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.927248 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.930303 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 30, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.930595 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.930825 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.931528 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 48, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.931877 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.934260 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 31, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.934562 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.934784 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.935140 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 49, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.935561 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.937860 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 32, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.938189 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.938427 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.938976 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 50, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.939821 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.942191 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 33, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.942708 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.943463 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.944102 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 51, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.944343 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.946673 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 34, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.946901 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.947138 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.947496 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 52, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.948132 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.950625 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 35, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.951004 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.951642 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.951960 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 53, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.952484 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.954843 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 36, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.955073 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.955258 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.955440 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 54, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.955700 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.958456 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 37, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.958945 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.959147 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.959377 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 55, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.959632 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.962426 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 38, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.962919 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.963382 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.963816 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 56, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.964308 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.967236 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 39, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.967643 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.968397 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.968670 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 57, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.969119 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.971517 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 3a, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.971800 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.972129 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.972536 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 58, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.972890 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.975342 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 3b, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.975719 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.975945 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.976214 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 59, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.976573 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.979104 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 3c, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.979409 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.979646 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.979893 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 60, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.980251 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.982645 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 3d, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.982957 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.983313 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.983498 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 61, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.983909 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.986284 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 3e, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.986675 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.986891 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.987472 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 62, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.987960 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.990317 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 3f, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.990637 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.990904 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.991289 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 63, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.991784 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.994207 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 40, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.994599 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.994843 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.995409 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 64, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.995920 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:10.998222 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 41, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:10.998522 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:10.998751 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:10.999222 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 65, Address: 01301000, Length: 2, WKC: 0
+[22:59:10.999739 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.002164 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 42, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.002454 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.002729 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.002987 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 66, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.003480 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.005798 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 43, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.006180 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.006480 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.006898 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 67, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.007297 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.009654 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 44, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.009953 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.010278 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.010784 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 68, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.011131 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.013452 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 45, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.013791 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.014006 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.014387 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 69, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.014876 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.017181 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 46, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.017444 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.017847 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.018135 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 70, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.018419 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.020728 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 47, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.021082 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.021285 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.021727 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 71, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.022112 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.024504 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 48, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.024911 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.025292 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.025693 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 72, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.026177 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.028525 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 49, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.028910 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.029200 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.029933 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 73, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.030210 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.032577 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 4a, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.033096 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.033535 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.033979 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 74, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.034296 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.036684 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 4b, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.037096 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.037311 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.037698 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 75, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.037999 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.040394 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 4c, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.040742 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.040998 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.041525 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 76, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.042031 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.044412 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 4d, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.044752 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.044953 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.045174 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 77, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.045553 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.047939 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 4e, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.048309 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.048601 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.048834 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 78, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.049440 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.051801 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 4f, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.052128 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.052361 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.052697 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 79, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.053033 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.055363 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 50, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.055639 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.055884 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.056453 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 80, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.056794 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.059097 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 51, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.059466 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.059685 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.059966 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 81, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.060472 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.062836 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 52, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.063251 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.063471 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.063834 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 82, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.064175 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.066493 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 53, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.066770 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.067053 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.067351 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 83, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.067908 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.070241 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 54, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.070708 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.071277 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.071707 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 84, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.072237 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.074568 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 55, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.074829 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.075089 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.075402 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 85, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.075754 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.078110 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 56, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.078658 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.079105 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.079411 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 86, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.079736 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.082061 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 57, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.082535 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.082819 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.083083 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 87, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.083638 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.085957 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 58, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.086244 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.086500 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.086835 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 88, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.087219 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.089532 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 59, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.090053 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.090422 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.090793 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 89, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.091262 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.093609 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 5a, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.093860 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.094094 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.094295 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 90, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.094680 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.096976 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 5b, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.097455 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.097928 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.098340 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 91, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.098823 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.101167 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 5c, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.101725 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.101946 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.102291 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 92, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.102616 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.104923 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 5d, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.105251 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.105600 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.106122 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 93, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.106952 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.109399 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 5e, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.109685 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.110083 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.110464 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 94, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.110902 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.113298 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 5f, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.113704 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.114005 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.114305 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 95, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.115039 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.117458 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 60, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.117764 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.118084 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.118353 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 96, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.118728 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.121075 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 61, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.121385 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.121664 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.121882 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 97, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.122405 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.124848 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 62, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.125369 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.125606 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.126001 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 98, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.126326 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.128646 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 63, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.129071 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.129340 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.129583 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 99, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.129991 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.132367 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 64, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.132788 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.133019 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.133222 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 100, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.133753 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.136095 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 65, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.136445 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.136654 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.136954 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 101, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.137230 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.139577 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 66, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.140045 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.140257 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.140425 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 102, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.140868 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.143169 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 67, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.143513 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.143763 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.144176 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 103, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.144537 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.146969 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 68, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.147513 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.148108 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.148661 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 104, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.149033 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.151378 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 69, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.151656 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.151934 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.152171 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 105, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.152485 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.154883 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 6a, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.155186 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.155425 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.155625 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 106, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.155969 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.158282 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 6b, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.158617 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.158852 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.159312 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 107, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.159837 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.162179 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 6c, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.162486 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.162676 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.162872 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 108, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.163454 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.165766 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 6d, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.166171 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.166356 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.166614 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 109, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.167128 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.169439 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 6e, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.169749 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.170105 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.170524 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 110, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.171113 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.173460 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 6f, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.173831 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.174146 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.174368 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 111, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.174706 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.176985 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 70, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.177320 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.177560 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.177976 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 112, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.178486 [34mDEBUG[0m] Ignoring packet starting with 0x03
+[22:59:11.180864 [32mINFO[0m] captured: [ff, ff, ff, ff, ff, ff, 10, 10, 10, 10, 10, 10, 88, a4, 0e, 10, 04, 71, 00, 10, 30, 01, 02, 00, 00, 00, 00, 00, 00, 00]
+[22:59:11.181258 [32mINFO[0m] Received packet: 10:10:10:10:10:10 > ff:ff:ff:ff:ff:ff; length: 30
+[22:59:11.181627 [32mINFO[0m] EtherCAT Packet - Length: 14, Type: 1
+[22:59:11.181839 [32mINFO[0m] EtherCAT Datagram - Command: 04, Index: 113, Address: 01301000, Length: 2, WKC: 0
+[22:59:11.216178 [34mDEBUG[0m] Ignoring packet starting with 0x03
