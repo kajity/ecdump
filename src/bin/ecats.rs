@@ -1,4 +1,5 @@
-use ecdump::packetdump;
+use ecdump::ec_packet;
+use ecdump::subdevice::ECStateMachine;
 
 use core::time;
 
@@ -95,7 +96,7 @@ fn main() {
         }
     };
 
-    let mut ethercat_state_machine = packetdump::EtherCATStateMachine::new();
+    let mut ethercat_state_machine = ECStateMachine::new();
     let timestamp = std::time::Instant::now();
     loop {
         let mark_of_self = (7, 0x03);
@@ -116,7 +117,7 @@ fn main() {
                     ethernet.get_destination(),
                     ethernet.packet().len(),
                 );
-                let ethercat_packet = match packetdump::EtherCATPacket::new(ethernet.payload()) {
+                let ethercat_packet = match ec_packet::ECPacket::new(ethernet.payload()) {
                     Some(pkt) => pkt,
                     None => {
                         warn!("Failed to parse EtherCAT packet");
@@ -129,7 +130,7 @@ fn main() {
                 //     ethercat_packet.protocol_type()
                 // );
                 let ethercat_datagram =
-                    match packetdump::EtherCATDatagram::new(ethercat_packet.payload()) {
+                    match ec_packet::ECDatagram::new(ethercat_packet.payload()) {
                         Some(dg) => dg,
                         None => {
                             warn!("Failed to parse EtherCAT datagram");
@@ -148,7 +149,7 @@ fn main() {
                 let mut return_packet = packet.to_vec();
                 return_packet[mark_of_self.0] = mark_of_self.1;
                 let mut ethercat_packet =
-                    packetdump::EtherCATPacketView::new(&mut return_packet[14..]).unwrap();
+                    ec_packet::ECPacketView::new(&mut return_packet[14..]).unwrap();
                 ethercat_state_machine.next(&mut ethercat_packet);
                 // debug!("Response packet: {:02x?}", return_packet.as_slice());
                 tx.send_to(return_packet.as_slice(), None);

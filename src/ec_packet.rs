@@ -1,30 +1,13 @@
 use log::debug;
 
-pub enum EtherCATState {
-    Init,
-    PreOP,
-    SafeOP,
-    OP,
-}
-
-pub struct EtherCATStateMachine {
-    state: EtherCATState,
-}
-
-impl Default for EtherCATState {
-    fn default() -> Self {
-        EtherCATState::Init
-    }
-}
-
 #[derive(Debug)]
-pub struct EtherCATPacket<'a> {
+pub struct ECPacket<'a> {
     length: u16,
     type_field: u8,
     payload: &'a [u8],
 }
 
-pub struct EtherCATPacketView<'a> {
+pub struct ECPacketView<'a> {
     data: &'a mut [u8],
 }
 
@@ -59,14 +42,14 @@ pub struct EtherCATPacketView<'a> {
 ///     have to be mapped to which local address space using the configuration information of the FMMUs.
 ///     Logical Addressing supports bit wise mapping. Logical Addressing is a powerful mechanism to reduce
 ///     the overhead of process data communication, thus it is typically used for accessing process data.
-pub enum EtherCATAddress {
+pub enum ECAddress {
     Position { adp: u16, ado: u16 }, // Auto Increment address, Broadcast
-    Node { address: u16, offset: u16 },     // Configured Station Address/Configured Station Alias
-    Logical(u32),                           //
+    Node { address: u16, offset: u16 }, // Configured Station Address/Configured Station Alias
+    Logical(u32),                    // Logical Addressing
 }
 
 #[derive(Debug)]
-pub struct EtherCATDatagram<'a> {
+pub struct ECDatagram<'a> {
     command: u8,
     index: u8,
     address: u32,
@@ -78,13 +61,13 @@ pub struct EtherCATDatagram<'a> {
     wkc: u16,
 }
 
-pub struct EtherCATDatagramView<'a> {
+pub struct ECDatagramView<'a> {
     data: &'a mut [u8],
     data_len: usize,
 }
 
-impl<'a> EtherCATPacket<'a> {
-    pub fn new(data: &'a [u8]) -> Option<EtherCATPacket<'a>> {
+impl<'a> ECPacket<'a> {
+    pub fn new(data: &'a [u8]) -> Option<ECPacket<'a>> {
         if data.len() < 2 {
             return None;
         }
@@ -94,7 +77,7 @@ impl<'a> EtherCATPacket<'a> {
         let length = header & 0x07FF;
         let type_field = ((header & 0xF000) >> 12) as u8;
         let payload = &data[2..];
-        Some(EtherCATPacket {
+        Some(ECPacket {
             length,
             type_field,
             payload,
@@ -112,8 +95,8 @@ impl<'a> EtherCATPacket<'a> {
     }
 }
 
-impl<'a> EtherCATDatagram<'a> {
-    pub fn new(data: &'a [u8]) -> Option<EtherCATDatagram<'a>> {
+impl<'a> ECDatagram<'a> {
+    pub fn new(data: &'a [u8]) -> Option<ECDatagram<'a>> {
         if data.len() < 10 {
             return None;
         }
@@ -136,7 +119,7 @@ impl<'a> EtherCATDatagram<'a> {
         }
         let wkc = u16::from_le_bytes([data[wkc_offset], data[wkc_offset + 1]]);
 
-        Some(EtherCATDatagram {
+        Some(ECDatagram {
             command,
             index,
             address,
@@ -178,40 +161,40 @@ impl<'a> EtherCATDatagram<'a> {
     }
     pub fn command_str(&self) -> &'static str {
         match self.command {
-            0x0 => "NOP",  // No Operation
-            0x1 => "APRD", // Auto Increment Physical Read
-            0x2 => "APWR", // Auto Increment Physical Write
-            0x3 => "APRW", // Auto Increment Physical Read/Write
-            0x4 => "FPRD", // Configured Address Physical Read
-            0x5 => "FPWR", // Configured Address Physical Write
-            0x6 => "FPRW", // Configured Address Physical Read/Write
-            0x7 => "BRD",  // Broadcast Read
-            0x8 => "BWR",  // Broadcast Write
-            0x9 => "BRW",  // Broadcast Read/Write
-            0xA => "LRD",  // Logical Memory Read
-            0xB => "LWR",  // Logical Memory Write
-            0xC => "LRW",  // Logical Memory Read/Write
-            0xD => "ARMW", // Auto Increment Physical Read Modify Write
-            0xE => "FRMW", // Configured Address Physical Read Modify Write
+            ECCommand::NOP => "NOP",   // No Operation
+            ECCommand::APRD => "APRD", // Auto Increment Physical Read
+            ECCommand::APWR => "APWR", // Auto Increment Physical Write
+            ECCommand::APRW => "APRW", // Auto Increment Physical Read/Write
+            ECCommand::FPRD => "FPRD", // Configured Address Physical Read
+            ECCommand::FPWR => "FPWR", // Configured Address Physical Write
+            ECCommand::FPRW => "FPRW", // Configured Address Physical Read/Write
+            ECCommand::BRD => "BRD",   // Broadcast Read
+            ECCommand::BWR => "BWR",   // Broadcast Write
+            ECCommand::BRW => "BRW",   // Broadcast Read/Write
+            ECCommand::LRD => "LRD",   // Logical Memory Read
+            ECCommand::LWR => "LWR",   // Logical Memory Write
+            ECCommand::LRW => "LRW",   // Logical Memory Read/Write
+            ECCommand::ARMW => "ARMW", // Auto Increment Physical Read Modify Write
+            ECCommand::FRMW => "FRMW", // Configured Address Physical Read Modify Write
             _ => "UNKNOWN",
         }
     }
 }
 
-impl<'a> EtherCATPacketView<'a> {
-    pub fn new(data: &'a mut [u8]) -> Option<EtherCATPacketView<'a>> {
+impl<'a> ECPacketView<'a> {
+    pub fn new(data: &'a mut [u8]) -> Option<ECPacketView<'a>> {
         if data.len() < 2 {
             return None;
         }
-        Some(EtherCATPacketView { data })
+        Some(ECPacketView { data })
     }
     pub fn payload(&mut self) -> &mut [u8] {
         &mut self.data[2..]
     }
 }
 
-impl<'a> EtherCATDatagramView<'a> {
-    pub fn new(data: &'a mut [u8]) -> Option<EtherCATDatagramView<'a>> {
+impl<'a> ECDatagramView<'a> {
+    pub fn new(data: &'a mut [u8]) -> Option<ECDatagramView<'a>> {
         if data.len() < 10 {
             return None;
         }
@@ -219,7 +202,7 @@ impl<'a> EtherCATDatagramView<'a> {
         if data.len() < (10 + data_len as usize + 2) {
             return None;
         }
-        Some(EtherCATDatagramView {
+        Some(ECDatagramView {
             data,
             data_len: data_len as usize,
         })
@@ -259,42 +242,22 @@ impl<'a> EtherCATDatagramView<'a> {
     }
 }
 
-impl EtherCATStateMachine {
-    pub fn new() -> Self {
-        EtherCATStateMachine {
-            state: EtherCATState::Init,
-        }
-    }
-
-    pub fn next(&mut self, datagram: &mut EtherCATPacketView) {
-        let mut datagram_view = EtherCATDatagramView::new(datagram.payload()).unwrap();
-        match self.state {
-            EtherCATState::Init => {
-                // if datagram.command() == 0x02 {
-                //     // APRD
-                //     debug!("Handling APRD in INIT state");
-                //     // Here you would add logic to handle the APRD command in INIT state
-                //     // For example, you might want to change the state based on certain conditions
-                //     *state = EtherCATState::PreOP;
-                // }
-                self.handle_ethercat_datagram_init(&mut datagram_view);
-            }
-            EtherCATState::PreOP => {
-                debug!("In PRE-OP state, no specific handling implemented yet");
-                // Add handling for PRE-OP state if needed
-            }
-            EtherCATState::SafeOP => {
-                debug!("In SAFE-OP state, no specific handling implemented yet");
-                // Add handling for SAFE-OP state if needed
-            }
-            EtherCATState::OP => {
-                debug!("In OP state, no specific handling implemented yet");
-                // Add handling for OP state if needed
-            }
-        }
-    }
-
-    fn handle_ethercat_datagram_init(&self, datagram: &mut EtherCATDatagramView) {
-        datagram.inc_wkc().inc_autoincrement_address();
-    }
+#[allow(non_snake_case)]
+#[allow(non_upper_case_globals)]
+pub mod ECCommand {
+    pub const NOP: u8 = 0x00; // No Operation
+    pub const APRD: u8 = 0x01; // Auto Increment Physical Read
+    pub const APWR: u8 = 0x02; // Auto Increment Physical Write
+    pub const APRW: u8 = 0x03; // Auto Increment Physical Read/Write
+    pub const FPRD: u8 = 0x04; // Configured Address Physical Read
+    pub const FPWR: u8 = 0x05; // Configured Address Physical Write
+    pub const FPRW: u8 = 0x06; // Configured Address Physical Read/Write
+    pub const BRD: u8 = 0x07; // Broadcast Read
+    pub const BWR: u8 = 0x08; // Broadcast Write
+    pub const BRW: u8 = 0x09; // Broadcast Read/Write
+    pub const LRD: u8 = 0x0A; // Logical Memory Read
+    pub const LWR: u8 = 0x0B; // Logical Memory Write
+    pub const LRW: u8 = 0x0C; // Logical Memory Read/Write
+    pub const ARMW: u8 = 0x0D; // Auto Increment Physical Read Modify Write
+    pub const FRMW: u8 = 0x0E; // Configured Address Physical Read Modify Write
 }
