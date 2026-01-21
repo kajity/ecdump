@@ -1,12 +1,13 @@
 use anyhow::{Result, anyhow, bail};
 use bytes::{BufMut, Bytes, BytesMut};
-use log::error;
+use log::{error, info};
 use netdev::prelude::OperState;
 use pcap_file::{pcap, pcapng, pcapng::Block as PcapNgBlock};
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::{Config, NetworkInterface};
 use pnet::packet::Packet;
 use pnet::packet::ethernet::EthernetPacket;
+use pnet::util::MacAddr;
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -184,6 +185,8 @@ pub fn start_read_pcap(
     } else {
         handle = std::thread::spawn(move || {
             let mut pcap_reader = pcap::PcapReader::new(pcap_file).expect("PCAP Reader");
+            let mut initial_frame = true;
+            let mut src_mac = MacAddr::zero();
 
             while running.load(Ordering::SeqCst)
                 && let Some(Ok(packet)) = pcap_reader.next_packet()
@@ -192,6 +195,16 @@ pub fn start_read_pcap(
                 if ethernet.get_ethertype().0 != 0x88a4 {
                     continue;
                 }
+
+                let from_main;
+                if initial_frame {
+                    src_mac = ethernet.get_source();
+                    initial_frame = false;
+                    from_main = true;
+                } else {
+                    from_main = ethernet.get_source() == src_mac;
+                }
+
                 let timestamp = packet.timestamp;
                 let ethercat_packet = ethernet.payload();
                 let mut buffer = match rx_recycle.try_recv() {
@@ -204,7 +217,7 @@ pub fn start_read_pcap(
                 if tx_data
                     .send(CapturedData {
                         timestamp: timestamp,
-                        from_main: false,
+                        from_main: from_main,
                         data: ethercat_packet,
                     })
                     .is_err()

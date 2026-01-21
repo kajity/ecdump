@@ -7,7 +7,7 @@ use spdlog::{ThreadPool, ThreadPoolBuilder, sink::Sink};
 
 pub struct Config {
     pub list_interfaces: bool,
-    pub verbose: bool,
+    pub verbose: u8,
     pub pcap_source: PcapSource,
     pub output_file: Option<String>,
 }
@@ -35,8 +35,8 @@ pub fn parse_args() -> Config {
         list_interfaces: bool,
 
         /// Enable verbose logging
-        #[arg(short, long, default_value_t = false)]
-        verbose: bool,
+        #[arg(short, long, action = clap::ArgAction::Count)]
+        verbose: u8,
     }
     let args = Cli::parse();
 
@@ -58,7 +58,7 @@ pub fn parse_args() -> Config {
     }
 }
 
-pub fn set_up_logging(verbose: bool) {
+pub fn set_up_logging(verbose: u8) {
     // use crate::logger::SimpleAsyncLogger;
     // let logger = Box::new(SimpleAsyncLogger::new(
     //     if verbose {
@@ -104,8 +104,6 @@ pub fn set_up_logging(verbose: bool) {
     //     .unwrap();
     // spdlog::set_default_logger(async_logger);
 
-    
-
     // Configure logger at runtime
     let colors_line = ColoredLevelConfig::new()
         .error(Color::Red)
@@ -124,10 +122,14 @@ pub fn set_up_logging(verbose: bool) {
                 message
             ))
         })
-        .level(if verbose {
+        .level(if verbose == 0 {
+            log::LevelFilter::Off
+        } else if verbose == 1 {
+            log::LevelFilter::Warn
+        } else if verbose == 2 {
             log::LevelFilter::Debug
         } else {
-            log::LevelFilter::Warn
+            log::LevelFilter::Trace
         })
         // Output to stdout, files, and other Dispatch configurations
         .chain(std::io::stdout())

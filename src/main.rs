@@ -7,8 +7,9 @@ use anyhow::{Context, Result, anyhow};
 use bytes::BytesMut;
 use console::style;
 use ecdump::ec_packet;
-use packet_source::{CapturedData, PcapSource};
 use log::{debug, error, info, warn};
+use netdev::net::device;
+use packet_source::{CapturedData, PcapSource};
 use std::fs::File;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,12 +33,8 @@ fn main() -> Result<()> {
     }
 
     startup::set_up_logging(config.verbose);
-    
-    // for i in 0..10000 {
-    //     warn!("Main loop iteration {}", i);
-    //     // warn!("Main loop iteration");
-    // }
-    // return Ok(());
+
+    let m = indicatif::MultiProgress::new();
 
     let running_flag = Arc::new(AtomicBool::new(true));
     let r = running_flag.clone();
@@ -72,39 +69,23 @@ fn main() -> Result<()> {
         }
     };
 
+    let mut device_manager = analyzer::DeviceManager::new();
+
     let timestamp = std::time::Instant::now();
     loop {
         match rx_buffer.recv() {
-            Ok(CapturedData { data: packet, .. }) => {
-                let ethercat_packet = match ec_packet::ECPacket::new(packet.as_ref()) {
+            Ok(CapturedData { data: packet, timestamp, from_main }) => {
+                let ethercat_packet = match ec_packet::ECFrame::new(packet.as_ref()) {
                     Some(pkt) => pkt,
                     None => {
                         warn!("Failed to parse EtherCAT packet");
                         continue;
                     }
                 };
-                let ethercat_datagram = match ec_packet::ECDatagram::new(ethercat_packet.payload())
-                {
-                    Some(dg) => dg,
-                    None => {
-                        warn!("Failed to parse EtherCAT datagram");
-                        continue;
-                    }
-                };
-                info!(
-                    "EtherCAT Packet - Length: {}, Type: {}",
-                    ethercat_packet.datagram_length(),
-                    ethercat_packet.protocol_type()
-                );
 
-                info!(
-                    "EtherCAT Datagram - Command: {}({:02x}), Index: {}, Address: {:08x}, Length: {}",
-                    ethercat_datagram.command_str(),
-                    ethercat_datagram.command(),
-                    ethercat_datagram.index(),
-                    ethercat_datagram.address(),
-                    ethercat_datagram.length(),
-                );
+                let _ = device_manager
+                    .analyze_packet(&ethercat_packet, from_main)
+                    .map_err(|e| error!("{:?}", e));
 
                 match BytesMut::try_from(packet) {
                     Ok(buf) => {
@@ -122,7 +103,6 @@ fn main() -> Result<()> {
 
         let _duration = timestamp.elapsed();
     }
-    
 
     if let Err(e) = handle.join() {
         error!("Packet source thread terminated with error: {:?}", e);
