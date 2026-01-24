@@ -84,7 +84,7 @@ fn main() -> Result<()> {
                 };
 
                 let _ = device_manager
-                    .analyze_packet(&ethercat_packet, from_main)
+                    .analyze_packet(&ethercat_packet, timestamp, from_main)
                     .map_err(|e| error!("{:?}", e));
 
                 match BytesMut::try_from(packet) {

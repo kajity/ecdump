@@ -1,4 +1,3 @@
-use log::warn;
 use smallvec::SmallVec;
 
 #[derive(Debug)]
@@ -55,26 +54,26 @@ pub enum ECAddress {
     Logical(u32),                    // Logical Addressing
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct ECCommandType(u8);
-impl ECCommandType {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ECCommand(u8);
+impl ECCommand {
     pub fn as_str(&self) -> &'static str {
-        match self.0 {
-            ECCommand::NOP => "NOP",   // No Operation
-            ECCommand::APRD => "APRD", // Auto Increment Physical Read
-            ECCommand::APWR => "APWR", // Auto Increment Physical Write
-            ECCommand::APRW => "APRW", // Auto Increment Physical Read/Write
-            ECCommand::FPRD => "FPRD", // Configured Address Physical Read
-            ECCommand::FPWR => "FPWR", // Configured Address Physical Write
-            ECCommand::FPRW => "FPRW", // Configured Address Physical Read/Write
-            ECCommand::BRD => "BRD",   // Broadcast Read
-            ECCommand::BWR => "BWR",   // Broadcast Write
-            ECCommand::BRW => "BRW",   // Broadcast Read/Write
-            ECCommand::LRD => "LRD",   // Logical Memory Read
-            ECCommand::LWR => "LWR",   // Logical Memory Write
-            ECCommand::LRW => "LRW",   // Logical Memory Read/Write
-            ECCommand::ARMW => "ARMW", // Auto Increment Physical Read Modify Write
-            ECCommand::FRMW => "FRMW", // Configured Address Physical Read Modify Write
+        match *self {
+            ECCommands::NOP => "NOP",   // No Operation
+            ECCommands::APRD => "APRD", // Auto Increment Physical Read
+            ECCommands::APWR => "APWR", // Auto Increment Physical Write
+            ECCommands::APRW => "APRW", // Auto Increment Physical Read/Write
+            ECCommands::FPRD => "FPRD", // Configured Address Physical Read
+            ECCommands::FPWR => "FPWR", // Configured Address Physical Write
+            ECCommands::FPRW => "FPRW", // Configured Address Physical Read/Write
+            ECCommands::BRD => "BRD",   // Broadcast Read
+            ECCommands::BWR => "BWR",   // Broadcast Write
+            ECCommands::BRW => "BRW",   // Broadcast Read/Write
+            ECCommands::LRD => "LRD",   // Logical Memory Read
+            ECCommands::LWR => "LWR",   // Logical Memory Write
+            ECCommands::LRW => "LRW",   // Logical Memory Read/Write
+            ECCommands::ARMW => "ARMW", // Auto Increment Physical Read Modify Write
+            ECCommands::FRMW => "FRMW", // Configured Address Physical Read Modify Write
             _ => "UNKNOWN",
         }
     }
@@ -92,9 +91,10 @@ impl<'a> ECDatagrams<'a> {
 
 #[derive(Debug)]
 pub struct ECDatagram<'a> {
-    command: ECCommandType,
+    command: ECCommand,
     index: u8,
-    address: u32,
+    adp: u16,
+    ado: u16,
     length: u16,
     circular: bool,
     more: bool,
@@ -169,7 +169,8 @@ impl<'a> ECDatagram<'a> {
         }
         let command = data[0];
         let index = data[1];
-        let address = u32::from_le_bytes([data[2], data[3], data[4], data[5]]);
+        let adp = u16::from_le_bytes([data[2], data[3]]);
+        let ado = u16::from_le_bytes([data[4], data[5]]);
         // | more (1 bit) | circular (1 bit) | reserved (3 bits) | irq (11 bits) |
         let info = u16::from_le_bytes([data[6], data[7]]);
         let length = info & 0x07FF;
@@ -184,9 +185,10 @@ impl<'a> ECDatagram<'a> {
         let wkc = u16::from_le_bytes([data[wkc_offset], data[wkc_offset + 1]]);
 
         Ok(Some(ECDatagram {
-            command: ECCommandType(command),
+            command: ECCommand(command),
             index,
-            address,
+            adp,
+            ado,
             length,
             circular,
             more,
@@ -196,14 +198,14 @@ impl<'a> ECDatagram<'a> {
         }))
     }
 
-    pub fn command(&self) -> ECCommandType {
+    pub fn command(&self) -> ECCommand {
         self.command
     }
     pub fn index(&self) -> u8 {
         self.index
     }
-    pub fn address(&self) -> u32 {
-        self.address
+    pub fn address(&self) -> (u16, u16) {
+        (self.adp, self.ado)
     }
     pub fn length(&self) -> u16 {
         self.length
@@ -288,20 +290,22 @@ impl<'a> ECDatagramView<'a> {
 
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
-pub mod ECCommand {
-    pub const NOP: u8 = 0x00; // No Operation
-    pub const APRD: u8 = 0x01; // Auto Increment Physical Read
-    pub const APWR: u8 = 0x02; // Auto Increment Physical Write
-    pub const APRW: u8 = 0x03; // Auto Increment Physical Read/Write
-    pub const FPRD: u8 = 0x04; // Configured Address Physical Read
-    pub const FPWR: u8 = 0x05; // Configured Address Physical Write
-    pub const FPRW: u8 = 0x06; // Configured Address Physical Read/Write
-    pub const BRD: u8 = 0x07; // Broadcast Read
-    pub const BWR: u8 = 0x08; // Broadcast Write
-    pub const BRW: u8 = 0x09; // Broadcast Read/Write
-    pub const LRD: u8 = 0x0A; // Logical Memory Read
-    pub const LWR: u8 = 0x0B; // Logical Memory Write
-    pub const LRW: u8 = 0x0C; // Logical Memory Read/Write
-    pub const ARMW: u8 = 0x0D; // Auto Increment Physical Read Modify Write
-    pub const FRMW: u8 = 0x0E; // Configured Address Physical Read Modify Write
+pub mod ECCommands {
+    use crate::ec_packet::ECCommand;
+
+    pub const NOP: ECCommand = ECCommand(0x00); // No Operation
+    pub const APRD: ECCommand = ECCommand(0x01); // Auto Increment Physical Read
+    pub const APWR: ECCommand = ECCommand(0x02); // Auto Increment Physical Write
+    pub const APRW: ECCommand = ECCommand(0x03); // Auto Increment Physical Read/Write
+    pub const FPRD: ECCommand = ECCommand(0x04); // Configured Address Physical Read
+    pub const FPWR: ECCommand = ECCommand(0x05); // Configured Address Physical Write
+    pub const FPRW: ECCommand = ECCommand(0x06); // Configured Address Physical Read/Write
+    pub const BRD: ECCommand = ECCommand(0x07); // Broadcast Read
+    pub const BWR: ECCommand = ECCommand(0x08); // Broadcast Write
+    pub const BRW: ECCommand = ECCommand(0x09); // Broadcast Read/Write
+    pub const LRD: ECCommand = ECCommand(0x0A); // Logical Memory Read
+    pub const LWR: ECCommand = ECCommand(0x0B); // Logical Memory Write
+    pub const LRW: ECCommand = ECCommand(0x0C); // Logical Memory Read/Write
+    pub const ARMW: ECCommand = ECCommand(0x0D); // Auto Increment Physical Read Modify Write
+    pub const FRMW: ECCommand = ECCommand(0x0E); // Configured Address Physical Read Modify Write
 }
