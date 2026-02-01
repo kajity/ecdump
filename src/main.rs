@@ -7,8 +7,7 @@ use anyhow::{Context, Result, anyhow};
 use bytes::BytesMut;
 use console::style;
 use ecdump::ec_packet;
-use log::{debug, error, info, warn};
-use netdev::net::device;
+use log::{debug, error, warn};
 use packet_source::{CapturedData, PcapSource};
 use std::fs::File;
 use std::sync::Arc;
@@ -34,7 +33,6 @@ fn main() -> Result<()> {
 
     startup::set_up_logging(config.verbose);
 
-    let m = indicatif::MultiProgress::new();
 
     let running_flag = Arc::new(AtomicBool::new(true));
     let r = running_flag.clone();
@@ -74,7 +72,11 @@ fn main() -> Result<()> {
     let timestamp = std::time::Instant::now();
     loop {
         match rx_buffer.recv() {
-            Ok(CapturedData { data: packet, timestamp, from_main }) => {
+            Ok(CapturedData {
+                data: packet,
+                timestamp,
+                from_main,
+            }) => {
                 let ethercat_packet = match ec_packet::ECFrame::new(packet.as_ref()) {
                     Some(pkt) => pkt,
                     None => {
@@ -87,14 +89,7 @@ fn main() -> Result<()> {
                     .analyze_packet(&ethercat_packet, timestamp, from_main)
                     .map_err(|e| error!("{:?}", e));
 
-                match BytesMut::try_from(packet) {
-                    Ok(buf) => {
-                        let _ = tx_buffer.send(buf);
-                    }
-                    Err(e) => {
-                        warn!("Failed to convert packet to BytesMut: {}", e);
-                    }
-                }
+                let _ = tx_buffer.send(BytesMut::from(packet));
             }
             Err(_) => {
                 break;

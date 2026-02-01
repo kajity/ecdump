@@ -1,9 +1,7 @@
-use log::{Level, LevelFilter, Metadata, Record, SetLoggerError};
-use std::fs::File;
+use log::{LevelFilter, Metadata, Record};
 use std::io::{BufWriter, Write};
 use std::sync::Mutex;
 use std::sync::mpsc::{Sender, channel};
-use std::time::SystemTime;
 
 enum LogEvent {
     Message(String),

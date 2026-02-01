@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow, bail};
 use bytes::{BufMut, Bytes, BytesMut};
-use log::{error, info};
+use log::error;
 use netdev::prelude::OperState;
 use pcap_file::{pcap, pcapng, pcapng::Block as PcapNgBlock};
 use pnet::datalink::Channel::Ethernet;
@@ -143,10 +143,12 @@ pub fn start_read_pcap(
     let (tx_data, rx_data) = mpsc::sync_channel(channel_size);
     let (tx_recycle, rx_recycle) = mpsc::channel();
 
-    let handle;
-    if is_pcapng {
-        handle = std::thread::spawn(move || {
+    let handle = if is_pcapng {
+        std::thread::spawn(move || {
             let mut pcapng_reader = pcapng::PcapNgReader::new(pcap_file).expect("PCAPNG Reader");
+            let mut initial_frame = true;
+            let mut src_mac = MacAddr::zero();
+            let mut initial_timestamp = Duration::from_secs(0);
 
             while running.load(Ordering::SeqCst)
                 && let Some(Ok(block)) = pcapng_reader.next_block()
@@ -161,8 +163,18 @@ pub fn start_read_pcap(
                 if ethernet.get_ethertype().0 != 0x88a4 {
                     continue;
                 }
-                let ethercat_packet = ethernet.payload();
 
+                let from_main = if initial_frame {
+                    src_mac = ethernet.get_source();
+                    initial_frame = false;
+                    initial_timestamp = timestamp;
+                    true
+                } else {
+                    ethernet.get_source() == src_mac
+                };
+
+                let timestamp = timestamp - initial_timestamp;
+                let ethercat_packet = ethernet.payload();
                 let mut buffer = match rx_recycle.try_recv() {
                     Ok(buf) => buf,
                     Err(_) => BytesMut::with_capacity(ethercat_packet.len()),
@@ -172,8 +184,8 @@ pub fn start_read_pcap(
                 let ethercat_packet = buffer.freeze();
                 if tx_data
                     .send(CapturedData {
-                        timestamp: timestamp,
-                        from_main: false,
+                        timestamp,
+                        from_main,
                         data: ethercat_packet,
                     })
                     .is_err()
@@ -181,12 +193,13 @@ pub fn start_read_pcap(
                     break;
                 }
             }
-        });
+        })
     } else {
-        handle = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             let mut pcap_reader = pcap::PcapReader::new(pcap_file).expect("PCAP Reader");
             let mut initial_frame = true;
             let mut src_mac = MacAddr::zero();
+            let mut initial_timestamp = Duration::from_secs(0);
 
             while running.load(Ordering::SeqCst)
                 && let Some(Ok(packet)) = pcap_reader.next_packet()
@@ -196,16 +209,16 @@ pub fn start_read_pcap(
                     continue;
                 }
 
-                let from_main;
-                if initial_frame {
+                let from_main = if initial_frame {
                     src_mac = ethernet.get_source();
                     initial_frame = false;
-                    from_main = true;
+                    initial_timestamp = packet.timestamp;
+                    true
                 } else {
-                    from_main = ethernet.get_source() == src_mac;
-                }
+                    ethernet.get_source() == src_mac
+                };
 
-                let timestamp = packet.timestamp;
+                let timestamp = packet.timestamp - initial_timestamp;
                 let ethercat_packet = ethernet.payload();
                 let mut buffer = match rx_recycle.try_recv() {
                     Ok(buf) => buf,
@@ -216,8 +229,8 @@ pub fn start_read_pcap(
                 let ethercat_packet = buffer.freeze();
                 if tx_data
                     .send(CapturedData {
-                        timestamp: timestamp,
-                        from_main: from_main,
+                        timestamp,
+                        from_main,
                         data: ethercat_packet,
                     })
                     .is_err()
@@ -226,7 +239,7 @@ pub fn start_read_pcap(
                     break;
                 }
             }
-        });
-    }
+        })
+    };
     (handle, tx_recycle, rx_data)
 }

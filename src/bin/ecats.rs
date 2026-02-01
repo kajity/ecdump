@@ -1,5 +1,4 @@
 use ecdump::ec_packet;
-use ecdump::subdevice::ECStateMachine;
 
 use core::time;
 
@@ -96,69 +95,69 @@ fn main() {
         }
     };
 
-    let mut ethercat_state_machine = ECStateMachine::new();
-    let timestamp = std::time::Instant::now();
-    loop {
-        let mark_of_self = (7, 0x03);
-        match rx.next() {
-            Ok(packet) => {
-                if packet[mark_of_self.0] == mark_of_self.1 {
-                    // debug!("Ignoring packet starting with 0x03");
-                    continue;
-                }
+    // let mut ethercat_state_machine = ECStateMachine::new();
+    // let timestamp = std::time::Instant::now();
+    // loop {
+    //     let mark_of_self = (7, 0x03);
+    //     match rx.next() {
+    //         Ok(packet) => {
+    //             if packet[mark_of_self.0] == mark_of_self.1 {
+    //                 // debug!("Ignoring packet starting with 0x03");
+    //                 continue;
+    //             }
 
-                let ethernet = EthernetPacket::new(packet).unwrap();
-                if ethernet.get_ethertype().0 != 0x88a4 {
-                    continue;
-                }
-                info!(
-                    "Received packet: {} > {}; length: {}",
-                    ethernet.get_source(),
-                    ethernet.get_destination(),
-                    ethernet.packet().len(),
-                );
-                let ethercat_packet = match ec_packet::ECPacket::new(ethernet.payload()) {
-                    Some(pkt) => pkt,
-                    None => {
-                        warn!("Failed to parse EtherCAT packet");
-                        continue;
-                    }
-                };
-                // info!(
-                //     "EtherCAT Packet - Length: {}, Type: {}",
-                //     ethercat_packet.datagram_length(),
-                //     ethercat_packet.protocol_type()
-                // );
-                let ethercat_datagram =
-                    match ec_packet::ECDatagram::new(ethercat_packet.payload()) {
-                        Some(dg) => dg,
-                        None => {
-                            warn!("Failed to parse EtherCAT datagram");
-                            continue;
-                        }
-                    };
-                info!(
-                    "EtherCAT Datagram - Command: {}({:02x}), Index: {}, Address: {:08x}, Length: {}",
-                    ethercat_datagram.command_str(),
-                    ethercat_datagram.command(),
-                    ethercat_datagram.index(),
-                    ethercat_datagram.address(),
-                    ethercat_datagram.length(),
-                );
+    //             let ethernet = EthernetPacket::new(packet).unwrap();
+    //             if ethernet.get_ethertype().0 != 0x88a4 {
+    //                 continue;
+    //             }
+    //             info!(
+    //                 "Received packet: {} > {}; length: {}",
+    //                 ethernet.get_source(),
+    //                 ethernet.get_destination(),
+    //                 ethernet.packet().len(),
+    //             );
+    //             let ethercat_packet = match ec_packet::ECPacket::new(ethernet.payload()) {
+    //                 Some(pkt) => pkt,
+    //                 None => {
+    //                     warn!("Failed to parse EtherCAT packet");
+    //                     continue;
+    //                 }
+    //             };
+    //             // info!(
+    //             //     "EtherCAT Packet - Length: {}, Type: {}",
+    //             //     ethercat_packet.datagram_length(),
+    //             //     ethercat_packet.protocol_type()
+    //             // );
+    //             let ethercat_datagram =
+    //                 match ec_packet::ECDatagram::new(ethercat_packet.payload()) {
+    //                     Some(dg) => dg,
+    //                     None => {
+    //                         warn!("Failed to parse EtherCAT datagram");
+    //                         continue;
+    //                     }
+    //                 };
+    //             info!(
+    //                 "EtherCAT Datagram - Command: {}({:02x}), Index: {}, Address: {:08x}, Length: {}",
+    //                 ethercat_datagram.command_str(),
+    //                 ethercat_datagram.command(),
+    //                 ethercat_datagram.index(),
+    //                 ethercat_datagram.address(),
+    //                 ethercat_datagram.length(),
+    //             );
 
-                let mut return_packet = packet.to_vec();
-                return_packet[mark_of_self.0] = mark_of_self.1;
-                let mut ethercat_packet =
-                    ec_packet::ECPacketView::new(&mut return_packet[14..]).unwrap();
-                ethercat_state_machine.next(&mut ethercat_packet);
-                // debug!("Response packet: {:02x?}", return_packet.as_slice());
-                tx.send_to(return_packet.as_slice(), None);
-            }
-            Err(e) => {
-                warn!("Failed to read packet: {}", e);
-            }
-        }
+    //             let mut return_packet = packet.to_vec();
+    //             return_packet[mark_of_self.0] = mark_of_self.1;
+    //             let mut ethercat_packet =
+    //                 ec_packet::ECPacketView::new(&mut return_packet[14..]).unwrap();
+    //             ethercat_state_machine.next(&mut ethercat_packet);
+    //             // debug!("Response packet: {:02x?}", return_packet.as_slice());
+    //             tx.send_to(return_packet.as_slice(), None);
+    //         }
+    //         Err(e) => {
+    //             warn!("Failed to read packet: {}", e);
+    //         }
+    //     }
 
-        let _duration = timestamp.elapsed();
-    }
+    //     let _duration = timestamp.elapsed();
+    // }
 }

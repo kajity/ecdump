@@ -1,9 +1,7 @@
-use std::sync::Arc;
 
 use crate::packet_source::{PcapFileConfig, PcapSource};
 use clap::Parser;
 use fern::colors::{Color, ColoredLevelConfig};
-use spdlog::{ThreadPool, ThreadPoolBuilder, sink::Sink};
 
 pub struct Config {
     pub list_interfaces: bool,
@@ -112,7 +110,7 @@ pub fn set_up_logging(verbose: u8) {
         .debug(Color::Blue)
         .trace(Color::BrightBlack);
 
-    let _ = fern::Dispatch::new()
+    fern::Dispatch::new()
         // Perform allocation-free log formatting
         .format(move |out, message, record| {
             out.finish(format_args!(
