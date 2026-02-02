@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::result;
 use std::time::Duration;
 
 use log::{debug, error, info, trace, warn};
@@ -20,6 +21,7 @@ pub enum ECError {
         expected: u16,
         actual: u16,
     },
+    ESMError(ESMError),
     UnsupportedCommand,
 }
 
@@ -64,51 +66,51 @@ impl DeviceManager {
         self.num_frames += 1;
 
         for datagram in datagrams.iter() {
-            match datagram.command() {
+            let _result =  match datagram.command() {
                 ECCommands::BRD => {
                     BrdCommand {
                         timestamp,
                         from_main,
                     }
-                    .process_common(self, datagram)?;
+                    .process_common(self, datagram)
                 }
                 ECCommands::BWR => {
                     BwrCommand {
                         timestamp,
                         from_main,
                     }
-                    .process_common(self, datagram)?;
+                    .process_common(self, datagram)
                 }
                 ECCommands::APWR => {
                     ApwrCommand {
                         timestamp,
                         from_main,
                     }
-                    .process_common(self, datagram)?;
+                    .process_common(self, datagram)
                 }
                 ECCommands::APRD => {
                     AprdCommand {
                         timestamp,
                         from_main,
                     }
-                    .process_common(self, datagram)?;
+                    .process_common(self, datagram)
                 }
                 ECCommands::FPWR => {
                     FpwrCommand {
                         timestamp,
                         from_main,
                     }
-                    .process_common(self, datagram)?;
+                    .process_common(self, datagram)
                 }
                 ECCommands::FPRD => {
                     FprdCommand {
                         timestamp,
                         from_main,
                     }
-                    .process_common(self, datagram)?;
+                    .process_common(self, datagram)
                 }
-                _ => {}
-            }
+                _ => Ok(())
+            };
         }
 
         Ok(())
@@ -194,7 +196,8 @@ impl Command for BrdCommand {
                 device.write_reg_brd(reg_addr, data);
 
                 device
-                    .state_machine_step::<subdevice::BrdCommandStepper>(device_manager.num_frames);
+                    .state_machine_step::<subdevice::BrdCommandStepper>(device_manager.num_frames)
+                    .map_err(ECError::ESMError)?;
             }
         }
 
@@ -354,13 +357,16 @@ impl Command for AprdCommand {
             let data = &datagram.payload()[0..datagram.length() as usize];
             device.write_reg_rd(reg_addr, data);
 
-            device.state_machine_step::<subdevice::AprdCommandStepper>(device_manager.num_frames);
+            let esm_result = device
+                .state_machine_step::<subdevice::AprdCommandStepper>(device_manager.num_frames)
+                .map_err(ECError::ESMError);
 
             if let Some(configured_address) = device.configured_address() {
                 device_manager
                     .config_address_map
                     .insert(configured_address, subdevice_index);
             }
+            esm_result?;
         }
 
         // for (i, (returned_data, reg_data)) in datagram.payload()[0..data_len]
@@ -473,7 +479,8 @@ impl Command for FprdCommand {
             subdevice.write_reg_rd(reg_addr, data);
 
             subdevice
-                .state_machine_step::<subdevice::FprdCommandStepper>(device_manager.num_frames);
+                .state_machine_step::<subdevice::FprdCommandStepper>(device_manager.num_frames)
+                .map_err(ECError::ESMError)?;
         }
 
         Ok(())

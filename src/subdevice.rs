@@ -2,8 +2,10 @@ use crate::registers::{AlControl, AlStatus, RegisterAddress};
 use std::collections::BTreeMap;
 
 use log::debug;
+use log::error;
+use log::warn;
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum ECState {
     #[default]
@@ -14,12 +16,31 @@ pub enum ECState {
     Bootstrap = 0x03,
 }
 
+#[derive(Debug)]
 pub enum ESMError {
-    InvalidTransition,
+    HasError,
+    IllegalTransition {
+        to: ECState,
+    },
+    InvalidStateTransition {
+        requested: ECState,
+        current: ECState,
+    },
+    BackwardTransition {
+        from: ECState,
+        to: ECState,
+        has_error: bool,
+    },
+    TransitionFailed {
+        requested: ECState,
+        current: ECState,
+        has_error: bool,
+    },
 }
 
 pub struct SubDevice {
     state: ECState,
+    has_esm_error: bool,
     configured_address: Option<u16>,
     al_status: Option<AlStatus>,
     al_status_code: Option<u16>,
@@ -33,6 +54,7 @@ impl SubDevice {
     pub fn new() -> Self {
         SubDevice {
             state: ECState::Init,
+            has_esm_error: false,
             configured_address: None,
             al_status: None,
             al_status_code: None,
@@ -70,7 +92,6 @@ impl SubDevice {
 
     pub fn write_reg_wr(&mut self, reg_addr: u16, data: &[u8]) {
         Self::write_reg_impl(&mut self.register_wr, reg_addr, data);
-        self.configured_address = self.load_configured_address();
     }
 
     pub fn read_reg_wr(&self, reg_addr: u16, length: u16) -> impl Iterator<Item = Option<u8>> {
@@ -93,27 +114,30 @@ impl SubDevice {
         Self::read_reg_impl(&self.register_brd, reg_addr, length)
     }
 
-    fn load_configured_address(&self) -> Option<u16> {
-        if self.configured_address.is_none() {
-            let configued_address = {
-                let mut iter = self.read_reg_wr(RegisterAddress::ConfiguredStationAddress, 2);
-                let low = iter.next().flatten()?;
-                let high = iter.next().flatten()?;
-                u16::from_le_bytes([low, high])
-            };
-            Some(configued_address)
-        } else {
-            self.configured_address
-        }
+    pub fn state_machine_step<T: CommandStepper>(
+        &mut self,
+        packet_num: u64,
+    ) -> Result<(), ESMError> {
+        T::execute(self, packet_num)
     }
 
-    pub fn state_machine_step<T: CommandStepper>(&mut self, packet_num: u64) {
-        T::execute(self, packet_num);
+    fn load_al_status_code(&mut self) {
+        let al_status_code = {
+            let mut iter = self.read_reg_rd(RegisterAddress::AlStatusCode, 2);
+            let low = iter.next().flatten();
+            let high = iter.next().flatten();
+            if let (Some(low), Some(high)) = (low, high) {
+                Some(u16::from_le_bytes([low, high]))
+            } else {
+                None
+            }
+        };
+        self.al_status_code = al_status_code;
     }
 }
 
 pub trait CommandStepper {
-    fn execute(subdevice: &mut SubDevice, packet_num: u64) {
+    fn execute(subdevice: &mut SubDevice, packet_num: u64) -> Result<(), ESMError> {
         match subdevice.state {
             ECState::Init => {
                 let _ = Self::init(subdevice);
@@ -133,7 +157,7 @@ pub trait CommandStepper {
         }
         Self::common(subdevice);
 
-        Self::change_state(subdevice, packet_num);
+        Self::change_state(subdevice, packet_num)
     }
 
     fn init(_subdevice: &mut SubDevice) -> Option<()> {
@@ -152,41 +176,117 @@ pub trait CommandStepper {
         Some(())
     }
 
-    fn change_state(subdevice: &mut SubDevice, packet_num: u64) -> Option<()> {
+    fn change_state(subdevice: &mut SubDevice, packet_num: u64) -> Result<(), ESMError> {
         if let Some(al_status) = subdevice.al_status {
+            let change_requested =
+                subdevice
+                    .al_control
+                    .and_then(|al_control| match al_control.state {
+                        Ok(requested_state) if requested_state != subdevice.state => {
+                            Some(requested_state)
+                        }
+                        _ => None,
+                    });
+
             if let Ok(new_state) = al_status.state {
-                if subdevice.state != new_state {
-                    debug!(
-                        "#{} SubDevice {:04x} state changed from {:?} to {:?}",
-                        packet_num,
-                        subdevice
-                            .configured_address()
-                            .map(|addr| addr as i32)
-                            .unwrap_or(-1),
-                        subdevice.state,
-                        new_state
-                    );
-                    subdevice.state = new_state;
-                }
-            }
-            if al_status.error {
-                let al_status_code = {
-                    let mut iter = subdevice.read_reg_rd(RegisterAddress::AlStatusCode, 2);
-                    let low = iter.next().flatten();
-                    let high = iter.next().flatten();
-                    if let (Some(low), Some(high)) = (low, high) {
-                        Some(u16::from_le_bytes([low, high]))
-                    } else {
-                        None
+                match change_requested {
+                    Some(requested_state) => {
+                        let old_state = subdevice.state;
+                        subdevice.state = new_state;
+                        if new_state > requested_state {
+                            return Err(ESMError::InvalidStateTransition {
+                                requested: requested_state,
+                                current: subdevice.state,
+                            });
+                        }
+
+                        if new_state < old_state {
+                            error!(
+                                "#{} SubDevice {:04x} state changed backward from {:?} to {:?}",
+                                packet_num,
+                                subdevice
+                                    .configured_address()
+                                    .map(|addr| addr as i32)
+                                    .unwrap_or(-1),
+                                old_state,
+                                new_state
+                            );
+                            subdevice.has_esm_error = true;
+                            subdevice.load_al_status_code();
+                            return Err(ESMError::BackwardTransition {
+                                from: old_state,
+                                to: new_state,
+                                has_error: al_status.error,
+                            });
+                        }
+                        if new_state < requested_state {
+                            warn!(
+                                "#{} SubDevice {:04x} state change to {:?} failed",
+                                packet_num,
+                                subdevice
+                                    .configured_address()
+                                    .map(|addr| addr as i32)
+                                    .unwrap_or(-1),
+                                requested_state
+                            );
+                            return Err(ESMError::TransitionFailed {
+                                requested: requested_state,
+                                current: new_state,
+                                has_error: al_status.error,
+                            });
+                        }
+
+                        if new_state > old_state {
+                            debug!(
+                                "#{} SubDevice {:04x} state changed from {:?} to {:?}",
+                                packet_num,
+                                subdevice
+                                    .configured_address()
+                                    .map(|addr| addr as i32)
+                                    .unwrap_or(-1),
+                                old_state,
+                                new_state
+                            );
+                        }
                     }
-                };
-                subdevice.al_status_code = al_status_code;
-            } else {
-                subdevice.al_status_code = None;
+                    None => {
+                        let old_state = subdevice.state;
+                        subdevice.state = new_state;
+                        if subdevice.al_control.is_none() {
+                            return Err(ESMError::IllegalTransition { to: new_state });
+                        }
+
+                        if new_state < old_state {
+                            error!(
+                                "#{} SubDevice {:04x} state changed backward from {:?} to {:?}",
+                                packet_num,
+                                subdevice
+                                    .configured_address()
+                                    .map(|addr| addr as i32)
+                                    .unwrap_or(-1),
+                                old_state,
+                                new_state
+                            );
+                            subdevice.has_esm_error = true;
+                            subdevice.load_al_status_code();
+                            return Err(ESMError::BackwardTransition {
+                                from: old_state,
+                                to: new_state,
+                                has_error: al_status.error,
+                            });
+                        }
+                        if new_state > old_state {
+                            return Err(ESMError::InvalidStateTransition {
+                                requested: old_state,
+                                current: new_state,
+                            });
+                        }
+                    }
+                }
             }
         }
 
-        Some(())
+        Ok(())
     }
 }
 
@@ -207,6 +307,8 @@ impl CommandStepper for BrdCommandStepper {
             && al_status.state.is_ok()
         {
             subdevice.al_status = Some(al_status);
+        } else {
+            subdevice.al_status = None;
         }
 
         Some(())
