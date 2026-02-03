@@ -740,6 +740,7 @@ dependencies = [
  "chrono",
  "clap",
  "console",
+ "crossbeam-channel",
  "crossterm",
  "ctrlc",
  "env_logger",

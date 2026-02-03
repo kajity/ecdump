@@ -20,6 +20,20 @@ impl AlControl {
 
         Self { state, acknowledge }
     }
+
+    pub fn try_from(al_control: u8) -> Option<Self> {
+        let state = match al_control & 0x0F {
+            0x01 => Ok(ECState::Init),
+            0x02 => Ok(ECState::PreOp),
+            0x03 => Ok(ECState::Bootstrap),
+            0x04 => Ok(ECState::SafeOp),
+            0x08 => Ok(ECState::Op),
+            _ => return None,
+        };
+        let acknowledge = (al_control & 0x10) != 0;
+
+        Some(Self { state, acknowledge })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,6 +55,20 @@ impl AlStatus {
         let error = (al_status & 0x10) != 0;
 
         Self { state, error }
+    }
+
+    pub fn try_from(al_status: u8) -> Option<Self> {
+        let state = match al_status & 0x0F {
+            0x01 => Ok(ECState::Init),
+            0x02 => Ok(ECState::PreOp),
+            0x03 => Ok(ECState::Bootstrap),
+            0x04 => Ok(ECState::SafeOp),
+            0x08 => Ok(ECState::Op),
+            _ => return None,
+        };
+        let error = (al_status & 0x10) != 0;
+
+        Some(Self { state, error })
     }
 }
 

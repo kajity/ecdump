@@ -6,6 +6,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 pub struct Config {
     pub list_interfaces: bool,
     pub verbose: u8,
+    pub debug: u8,
     pub pcap_source: PcapSource,
     pub output_file: Option<String>,
 }
@@ -32,9 +33,12 @@ pub fn parse_args() -> Config {
         #[arg(short = 'D', long, default_value_t = false)]
         list_interfaces: bool,
 
-        /// Enable verbose logging
+        /// Enable verbose reporting (can be used multiple times for increased verbosity)
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
+        
+        #[arg(short, long, hide = true, action = clap::ArgAction::Count)]
+        debug: u8,
     }
     let args = Cli::parse();
 
@@ -51,6 +55,7 @@ pub fn parse_args() -> Config {
     Config {
         list_interfaces: args.list_interfaces,
         verbose: args.verbose,
+        debug: args.debug,
         pcap_source,
         output_file: args.write,
     }

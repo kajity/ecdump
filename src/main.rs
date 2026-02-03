@@ -3,13 +3,15 @@ mod logger;
 mod packet_source;
 mod startup;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use bytes::BytesMut;
 use console::style;
+use crossbeam_channel::bounded;
 use ecdump::ec_packet;
 use log::{debug, error, warn};
 use packet_source::{CapturedData, PcapSource};
 use std::fs::File;
+use std::io::BufWriter;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -31,11 +33,23 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    startup::set_up_logging(config.verbose);
-
+    startup::set_up_logging(config.debug);
 
     let running_flag = Arc::new(AtomicBool::new(true));
     let r = running_flag.clone();
+    let file_out = match &config.output_file {
+        Some(path) => {
+            if let PcapSource::File(file_in) = &config.pcap_source {
+                if file_in.file_path == *path {
+                    bail!("Output file path must be different from input file path");
+                }
+            }
+            let file_out = File::create(path)
+                .with_context(|| format!("Failed to create output file: {}", path))?;
+            Some(BufWriter::new(file_out))
+        }
+        None => None,
+    };
 
     let (handle, tx_buffer, rx_buffer) = match config.pcap_source {
         PcapSource::File(file) => {
@@ -47,11 +61,15 @@ fn main() -> Result<()> {
             let file_in = File::open(&file.file_path)
                 .with_context(|| format!("Failed to open pcap file: {}", &file.file_path))?;
 
-            packet_source::start_read_pcap(file_in, file.is_pcapng, running_flag.clone())
+            packet_source::start_read_pcap(file_in, file_out, file.is_pcapng, running_flag.clone())
         }
 
         PcapSource::Interface(interface) => {
+            let (abort_tx, abort_rx) = bounded::<bool>(0);
             ctrlc::set_handler(move || {
+                abort_tx.send(true).ok();
+                r.store(false, Ordering::SeqCst);
+                std::thread::sleep(std::time::Duration::from_millis(200));
                 std::process::exit(0);
             })
             .expect("Error setting Ctrl-C handler");
@@ -63,7 +81,7 @@ fn main() -> Result<()> {
                 )?;
 
             debug!("Using network interface: {}", interface.name);
-            packet_source::start_packet_receive(interface, running_flag.clone())?
+            packet_source::start_packet_receive(interface, file_out, (running_flag.clone(), abort_rx))?
         }
     };
 
@@ -89,7 +107,7 @@ fn main() -> Result<()> {
                     .analyze_packet(&ethercat_packet, timestamp, from_main)
                     .map_err(|e| error!("{:?}", e));
 
-                let _ = tx_buffer.send(BytesMut::from(packet));
+                tx_buffer.send(BytesMut::from(packet)).ok();
             }
             Err(_) => {
                 break;

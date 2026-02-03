@@ -1,8 +1,9 @@
 use crate::registers::{AlControl, AlStatus, RegisterAddress};
 use std::collections::BTreeMap;
+use std::fmt;
 
 use log::debug;
-use log::error;
+use log::info;
 use log::warn;
 
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -38,6 +39,22 @@ pub enum ESMError {
     },
 }
 
+pub enum SubdeviceIdentifier {
+    Alias(u16),
+    Address(u16),
+    Unknown,
+}
+
+impl fmt::Display for SubdeviceIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SubdeviceIdentifier::Alias(alias) => write!(f, "Alias {:04x}", alias),
+            SubdeviceIdentifier::Address(address) => write!(f, "Address {:04x}", address),
+            SubdeviceIdentifier::Unknown => write!(f, "Unknown"),
+        }
+    }
+}
+
 pub struct SubDevice {
     state: ECState,
     has_esm_error: bool,
@@ -69,8 +86,18 @@ impl SubDevice {
         self.configured_address
     }
 
-    pub fn configured_alias(&self) -> Option<u16> {
-        let mut iter = self.read_reg_wr(RegisterAddress::ConfiguredStationAlias, 2);
+    pub fn identifier(&self) -> SubdeviceIdentifier {
+        if let Some(alias) = self.configured_alias() {
+            SubdeviceIdentifier::Alias(alias)
+        } else if let Some(address) = self.configured_address() {
+            SubdeviceIdentifier::Address(address)
+        } else {
+            SubdeviceIdentifier::Unknown
+        }
+    }
+
+    fn configured_alias(&self) -> Option<u16> {
+        let mut iter = self.read_reg_rd(RegisterAddress::ConfiguredStationAlias, 2);
         let low = iter.next().flatten()?;
         let high = iter.next().flatten()?;
         Some(u16::from_le_bytes([low, high]))
@@ -201,13 +228,10 @@ pub trait CommandStepper {
                         }
 
                         if new_state < old_state {
-                            error!(
-                                "#{} SubDevice {:04x} state changed backward from {:?} to {:?}",
+                            warn!(
+                                "#{} SubDevice {} state changed backward from {:?} to {:?}",
                                 packet_num,
-                                subdevice
-                                    .configured_address()
-                                    .map(|addr| addr as i32)
-                                    .unwrap_or(-1),
+                                subdevice.identifier(),
                                 old_state,
                                 new_state
                             );
@@ -220,13 +244,10 @@ pub trait CommandStepper {
                             });
                         }
                         if new_state < requested_state {
-                            warn!(
-                                "#{} SubDevice {:04x} state change to {:?} failed",
+                            info!(
+                                "#{} SubDevice {} state change to {:?} failed",
                                 packet_num,
-                                subdevice
-                                    .configured_address()
-                                    .map(|addr| addr as i32)
-                                    .unwrap_or(-1),
+                                subdevice.identifier(),
                                 requested_state
                             );
                             return Err(ESMError::TransitionFailed {
@@ -238,12 +259,9 @@ pub trait CommandStepper {
 
                         if new_state > old_state {
                             debug!(
-                                "#{} SubDevice {:04x} state changed from {:?} to {:?}",
+                                "#{} SubDevice {} state changed from {:?} to {:?}",
                                 packet_num,
-                                subdevice
-                                    .configured_address()
-                                    .map(|addr| addr as i32)
-                                    .unwrap_or(-1),
+                                subdevice.identifier(),
                                 old_state,
                                 new_state
                             );
@@ -257,13 +275,10 @@ pub trait CommandStepper {
                         }
 
                         if new_state < old_state {
-                            error!(
-                                "#{} SubDevice {:04x} state changed backward from {:?} to {:?}",
+                            info!(
+                                "#{} SubDevice {} state changed backward from {:?} to {:?}",
                                 packet_num,
-                                subdevice
-                                    .configured_address()
-                                    .map(|addr| addr as i32)
-                                    .unwrap_or(-1),
+                                subdevice.identifier(),
                                 old_state,
                                 new_state
                             );
@@ -301,15 +316,12 @@ impl CommandStepper for BrdCommandStepper {
 
         let al_status = {
             let mut iter = subdevice.read_reg_brd(RegisterAddress::AlStatus, 1);
-            iter.next().flatten().map(|b| AlStatus::new(b))
+            iter.next()
+                .flatten()
+                .map(|b| AlStatus::try_from(b))
+                .flatten()
         };
-        if let Some(al_status) = al_status
-            && al_status.state.is_ok()
-        {
-            subdevice.al_status = Some(al_status);
-        } else {
-            subdevice.al_status = None;
-        }
+        subdevice.al_status = al_status;
 
         Some(())
     }

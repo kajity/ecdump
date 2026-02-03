@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::result;
 use std::time::Duration;
 
 use log::{debug, error, info, trace, warn};
@@ -54,19 +53,20 @@ impl DeviceManager {
             return Err(ECError::InvalidDatagram(ECPacketError::InvalidHeader));
         }
         let datagrams = packet.parse_datagram().map_err(ECError::InvalidDatagram)?;
+        self.num_frames += 1;
 
         for d in datagrams.iter() {
             trace!(
-                "Parsed EtherCAT Datagram -> command: {}, length: {}",
+                "Parsed EtherCAT Datagram #{} -> command: {}, length: {}",
+                self.num_frames,
                 d.command().as_str(),
                 d.length()
             );
         }
 
-        self.num_frames += 1;
 
         for datagram in datagrams.iter() {
-            let _result =  match datagram.command() {
+            let result =  match datagram.command() {
                 ECCommands::BRD => {
                     BrdCommand {
                         timestamp,
@@ -111,6 +111,34 @@ impl DeviceManager {
                 }
                 _ => Ok(())
             };
+
+            match result {
+                Err(ECError::InvalidAutoIncrementAddress(addr)) => {
+                    warn!(
+                        "Invalid auto-increment address {:#06x} in frame #{}",
+                        addr, self.num_frames
+                    );
+                }
+                Err(ECError::InvalidConfiguredAddress(addr)) => {
+                    warn!(
+                        "Invalid configured address {:#06x} in frame #{}",
+                        addr, self.num_frames
+                    );
+                }
+                Err(ECError::InvalidWkc { packet_number, command, from_main, timestamp, expected, actual }) => {
+                    warn!(
+                        "#{} WKC error: {}, adp {:04x}, ado {:#06x}, expected {}, got {}",
+                        packet_number,
+                        command.as_str(),
+                        datagram.address().0,
+                        datagram.address().1,
+                        expected,
+                        actual,
+                    );
+                }
+                _ => {}
+            }
+
         }
 
         Ok(())
@@ -121,7 +149,7 @@ impl Drop for DeviceManager {
     fn drop(&mut self) {
         debug!("Total analyzed EtherCAT frames: {}", self.num_frames);
         for (i, device) in self.devices.iter_mut().enumerate() {
-            // info!("SubDevice {}: {:?}", i, device.configured_address());
+            debug!("SubDevice {}: {}", i, device.identifier());
         }
     }
 }
@@ -137,13 +165,6 @@ trait Command {
         }
 
         if !self.check_wkc(device_manager, datagram) {
-            info!(
-                "WKC check failed: #{} {} expected {}, got {}",
-                device_manager.num_frames,
-                datagram.command().as_str(),
-                device_manager.expected_wkc,
-                datagram.wkc()
-            );
             return Err(ECError::InvalidWkc {
                 packet_number: device_manager.num_frames,
                 command: datagram.command(),
@@ -154,12 +175,7 @@ trait Command {
             });
         }
 
-        self.process(device_manager, datagram).map_err(|e| {
-            error!("{:?} : frame {}", e, device_manager.num_frames);
-            e
-        })?;
-
-        Ok(())
+        self.process(device_manager, datagram)
     }
 
     fn process(

@@ -1,17 +1,20 @@
 use anyhow::{Result, anyhow, bail};
 use bytes::{BufMut, Bytes, BytesMut};
-use log::error;
+use crossbeam_channel::{Receiver as CbReceiver, Sender as CbSender, bounded, select, unbounded};
+use log::{error, info};
 use netdev::prelude::OperState;
+use pcap_file::pcap::PcapWriter;
 use pcap_file::{pcap, pcapng, pcapng::Block as PcapNgBlock};
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::{Config, NetworkInterface};
 use pnet::packet::Packet;
 use pnet::packet::ethernet::EthernetPacket;
 use pnet::util::MacAddr;
+use std::borrow::Cow;
 use std::fs::File;
+use std::io::{ BufWriter};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 pub struct PcapFileConfig {
@@ -78,8 +81,9 @@ pub fn get_interface(ifname: Option<String>) -> Result<NetworkInterface> {
 
 pub fn start_packet_receive(
     interface: NetworkInterface,
-    running: Arc<AtomicBool>,
-) -> Result<(JoinHandle<()>, Sender<BytesMut>, Receiver<CapturedData>)> {
+    output_file: Option<BufWriter<File>>,
+    abort_signal: (Arc<AtomicBool>, CbReceiver<bool>),
+) -> Result<(JoinHandle<()>, CbSender<BytesMut>, CbReceiver<CapturedData>)> {
     let config = Config {
         read_timeout: Some(Duration::from_millis(100)), // Linux/BPF/Netmap only
         ..Default::default()
@@ -90,8 +94,14 @@ pub fn start_packet_receive(
     };
 
     let channel_size = 100;
-    let (tx_data, rx_data) = mpsc::sync_channel(channel_size);
-    let (tx_recycle, rx_recycle) = mpsc::channel();
+    let write_to_file = output_file.is_some();
+    // let (tx_data, rx_data) = mpsc::sync_channel(channel_size);
+    // let (tx_recycle, rx_recycle) = mpsc::channel();
+    let (tx_data, rx_data) = bounded::<CapturedData>(channel_size);
+    let (tx_recycle, rx_recycle) = unbounded::<BytesMut>();
+    let (tx_data_writer, rx_data_writer) = bounded::<CapturedData>(channel_size * 2);
+    let (tx_cycle_writer, rx_cycle_writer) = unbounded::<BytesMut>();
+    let (running, abort_rx) = abort_signal;
     let handle = std::thread::spawn(move || {
         let timestamp = Instant::now();
         while running.load(Ordering::SeqCst) {
@@ -103,12 +113,31 @@ pub fn start_packet_receive(
                         Some(eth) => eth,
                         _ => continue,
                     };
-                    let ethercat_packet = ethercat_packet.payload();
 
+                    if write_to_file {
+                        let send_data = ethercat_packet.packet();
+                        let mut buffer = match rx_cycle_writer.try_recv() {
+                            Ok(buf) => buf,
+                            Err(_) => BytesMut::with_capacity(send_data.len()),
+                        };
+                        buffer.clear();
+                        buffer.put_slice(send_data);
+                        let send_data = buffer.freeze();
+                        tx_data_writer
+                            .send(CapturedData {
+                                timestamp: timestamp.elapsed(),
+                                from_main: false,
+                                data: send_data,
+                            })
+                            .ok();
+                    }
+
+                    let ethercat_packet = ethercat_packet.payload();
                     let mut buffer = match rx_recycle.try_recv() {
                         Ok(buf) => buf,
                         Err(_) => BytesMut::with_capacity(ethercat_packet.len()),
                     };
+
                     buffer.clear();
                     buffer.put_slice(ethercat_packet);
                     let ethercat_packet = buffer.freeze();
@@ -131,17 +160,49 @@ pub fn start_packet_receive(
         }
     });
 
+    if let Some(output_file) = output_file {
+        let mut pcap_writer = PcapWriter::new(output_file).expect("PcapWriter");
+        std::thread::spawn(move || {
+            loop {
+                select! {
+                    recv(abort_rx) -> _ => break,
+                    recv(rx_data_writer) -> msg => {
+                        match msg {
+                            Ok(captured_data) => {
+                                let pcap_packet = pcap::PcapPacket {
+                                    timestamp: captured_data.timestamp,
+                                    orig_len: captured_data.data.len() as u32,
+                                    data: Cow::Borrowed(&captured_data.data),
+                                };
+                                pcap_writer.write_packet(&pcap_packet)
+                                .map_err(|e| error!("Failed to write packet to output file: {}", e)).ok();
+
+                                if tx_cycle_writer
+                                    .send(BytesMut::from(captured_data.data))
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                            Err(_) => break,
+                        }}
+                }
+            }
+        });
+    }
+
     Ok((handle, tx_recycle, rx_data))
 }
 
 pub fn start_read_pcap(
     pcap_file: File,
+    output_file: Option<BufWriter<File>>,
     is_pcapng: bool,
     running: Arc<AtomicBool>,
-) -> (JoinHandle<()>, Sender<BytesMut>, Receiver<CapturedData>) {
+) -> (JoinHandle<()>, CbSender<BytesMut>, CbReceiver<CapturedData>) {
     let channel_size = 0;
-    let (tx_data, rx_data) = mpsc::sync_channel(channel_size);
-    let (tx_recycle, rx_recycle) = mpsc::channel();
+    let (tx_data, rx_data) = bounded(channel_size);
+    let (tx_recycle, rx_recycle) = unbounded();
 
     let handle = if is_pcapng {
         std::thread::spawn(move || {
@@ -200,6 +261,16 @@ pub fn start_read_pcap(
             let mut initial_frame = true;
             let mut src_mac = MacAddr::zero();
             let mut initial_timestamp = Duration::from_secs(0);
+            let mut pcap_writer = match output_file {
+                Some(writer) => {
+                    let header = pcap::PcapHeader {
+                        datalink: pcap_reader.header().datalink,
+                        ..pcap::PcapHeader::default()
+                    };
+                    Some(PcapWriter::with_header(writer, header).expect("PcapWriter"))
+                }
+                None => None,
+            };
 
             while running.load(Ordering::SeqCst)
                 && let Some(Ok(packet)) = pcap_reader.next_packet()
@@ -207,6 +278,15 @@ pub fn start_read_pcap(
                 let ethernet = EthernetPacket::new(&packet.data).expect("ethernet packet");
                 if ethernet.get_ethertype().0 != 0x88a4 {
                     continue;
+                }
+
+                if let Some(pcap_writer) = pcap_writer.as_mut() {
+                    pcap_writer
+                        .write_packet(&packet)
+                        .map_err(|e| {
+                            error!("Failed to write packet to output file: {}", e);
+                        })
+                        .ok();
                 }
 
                 let from_main = if initial_frame {
