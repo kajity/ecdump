@@ -114,7 +114,7 @@ impl SubDevice {
         reg_addr: u16,
         length: u16,
     ) -> impl Iterator<Item = Option<u8>> {
-        (0..length).map(move |i| register.get(&reg_addr.wrapping_add(i)).cloned())
+        (0..length).map(move |i| register.get(&reg_addr.wrapping_add(i)).copied())
     }
 
     pub fn write_reg_wr(&mut self, reg_addr: u16, data: &[u8]) {

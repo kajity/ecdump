@@ -6,14 +6,12 @@ mod startup;
 use anyhow::{Context, Result, anyhow, bail};
 use bytes::BytesMut;
 use console::style;
-use crossbeam_channel::bounded;
+use crossbeam_channel::{bounded, select};
 use ecdump::ec_packet;
 use log::{debug, error, warn};
 use packet_source::{CapturedData, PcapSource};
 use std::fs::File;
 use std::io::BufWriter;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 fn main() -> Result<()> {
     let config = startup::parse_args();
@@ -35,8 +33,7 @@ fn main() -> Result<()> {
 
     startup::set_up_logging(config.debug);
 
-    let running_flag = Arc::new(AtomicBool::new(true));
-    let r = running_flag.clone();
+    let (abort_tx, abort_rx) = bounded::<bool>(0);
     let file_out = match &config.output_file {
         Some(path) => {
             if let PcapSource::File(file_in) = &config.pcap_source {
@@ -51,29 +48,29 @@ fn main() -> Result<()> {
         None => None,
     };
 
-    let (handle, tx_buffer, rx_buffer) = match config.pcap_source {
+    let (handle, tx_buffer, rx_data) = match config.pcap_source {
         PcapSource::File(file) => {
+            let (abort_tx2, abort_rx2) = bounded::<bool>(0);
             ctrlc::set_handler(move || {
-                r.store(false, Ordering::SeqCst);
+                abort_tx2.send(true).ok();
+                abort_tx.send(true).ok();
             })
             .expect("Error setting Ctrl-C handler");
 
             let file_in = File::open(&file.file_path)
                 .with_context(|| format!("Failed to open pcap file: {}", &file.file_path))?;
 
-            packet_source::start_read_pcap(file_in, file_out, file.is_pcapng, running_flag.clone())
+            packet_source::start_read_pcap(file_in, file_out, file.is_pcapng, abort_rx2)
                 .with_context(|| {
                     format!("Failed to start reading pcap file: {}", &file.file_path)
                 })?
         }
 
         PcapSource::Interface(interface) => {
-            let (abort_tx, abort_rx) = bounded::<bool>(0);
+            let (abort_tx2, abort_rx2) = bounded::<bool>(0);
             ctrlc::set_handler(move || {
+                abort_tx2.send(true).ok();
                 abort_tx.send(true).ok();
-                r.store(false, Ordering::SeqCst);
-                std::thread::sleep(std::time::Duration::from_millis(200));
-                std::process::exit(0);
             })
             .expect("Error setting Ctrl-C handler");
 
@@ -82,48 +79,56 @@ fn main() -> Result<()> {
             )?;
 
             debug!("Using network interface: {}", interface.name);
-            packet_source::start_packet_receive(
-                interface,
-                file_out,
-                (running_flag.clone(), abort_rx),
-            )?
+            packet_source::start_packet_receive(interface, file_out, abort_rx2)?
         }
     };
 
     let mut device_manager = analyzer::DeviceManager::new();
 
-    let timestamp = std::time::Instant::now();
     loop {
-        match rx_buffer.recv() {
-            Ok(CapturedData {
-                data: packet,
-                timestamp,
-                from_main,
-            }) => {
-                let ethercat_packet = match ec_packet::ECFrame::new(packet.as_ref()) {
-                    Some(pkt) => pkt,
-                    None => {
-                        warn!("Failed to parse EtherCAT packet");
-                        continue;
-                    }
-                };
-
-                let _ = device_manager
-                    .analyze_packet(&ethercat_packet, timestamp, from_main)
-                    .map_err(|e| error!("{:?}", e));
-
-                tx_buffer.send(BytesMut::from(packet)).ok();
-            }
-            Err(_) => {
-                break;
-            }
+        if abort_rx.try_recv().is_ok() {
+            break;
         }
 
-        let _duration = timestamp.elapsed();
-    }
+        select! {
+            recv(abort_rx) -> _ => {
+                break;
+            }
+            recv(rx_data) -> msg => {
+                match msg {
+                    Ok(CapturedData {
+                        data: packet,
+                        timestamp,
+                        from_main,
+                    }) => {
+                        let ethercat_packet = match ec_packet::ECFrame::new(packet.as_ref()) {
+                            Some(pkt) => pkt,
+                            None => {
+                                warn!("Failed to parse EtherCAT packet");
+                                continue;
+                            }
+                        };
 
-    if let Err(e) = handle.join() {
-        error!("Packet source thread terminated with error: {:?}", e);
+                        let _ = device_manager
+                            .analyze_packet(&ethercat_packet, timestamp, from_main)
+                            .map_err(|e| error!("{:?}", e));
+
+                        tx_buffer.send(BytesMut::from(packet)).ok();
+                    }
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    drop(rx_data);
+    drop(tx_buffer);
+
+    if let Some(handle) = handle {
+        if let Err(e) = handle.join() {
+            error!("Packet source thread terminated with error: {:?}", e);
+        }
     }
 
     Ok(())

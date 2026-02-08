@@ -64,52 +64,39 @@ impl DeviceManager {
             );
         }
 
-
         for datagram in datagrams.iter() {
-            let result =  match datagram.command() {
-                ECCommands::BRD => {
-                    BrdCommand {
-                        timestamp,
-                        from_main,
-                    }
-                    .process_common(self, datagram)
+            let result = match datagram.command() {
+                ECCommands::BRD => BrdCommand {
+                    timestamp,
+                    from_main,
                 }
-                ECCommands::BWR => {
-                    BwrCommand {
-                        timestamp,
-                        from_main,
-                    }
-                    .process_common(self, datagram)
+                .process_common(self, datagram),
+                ECCommands::BWR => BwrCommand {
+                    timestamp,
+                    from_main,
                 }
-                ECCommands::APWR => {
-                    ApwrCommand {
-                        timestamp,
-                        from_main,
-                    }
-                    .process_common(self, datagram)
+                .process_common(self, datagram),
+                ECCommands::APWR => ApwrCommand {
+                    timestamp,
+                    from_main,
                 }
-                ECCommands::APRD => {
-                    AprdCommand {
-                        timestamp,
-                        from_main,
-                    }
-                    .process_common(self, datagram)
+                .process_common(self, datagram),
+                ECCommands::APRD => AprdCommand {
+                    timestamp,
+                    from_main,
                 }
-                ECCommands::FPWR => {
-                    FpwrCommand {
-                        timestamp,
-                        from_main,
-                    }
-                    .process_common(self, datagram)
+                .process_common(self, datagram),
+                ECCommands::FPWR => FpwrCommand {
+                    timestamp,
+                    from_main,
                 }
-                ECCommands::FPRD => {
-                    FprdCommand {
-                        timestamp,
-                        from_main,
-                    }
-                    .process_common(self, datagram)
+                .process_common(self, datagram),
+                ECCommands::FPRD => FprdCommand {
+                    timestamp,
+                    from_main,
                 }
-                _ => Ok(())
+                .process_common(self, datagram),
+                _ => Ok(()),
             };
 
             match result {
@@ -125,7 +112,14 @@ impl DeviceManager {
                         addr, self.num_frames
                     );
                 }
-                Err(ECError::InvalidWkc { packet_number, command, from_main, timestamp, expected, actual }) => {
+                Err(ECError::InvalidWkc {
+                    packet_number,
+                    command,
+                    from_main,
+                    timestamp,
+                    expected,
+                    actual,
+                }) => {
                     warn!(
                         "#{} WKC error: {}, adp {:04x}, ado {:#06x}, expected {}, got {}",
                         packet_number,
@@ -138,7 +132,6 @@ impl DeviceManager {
                 }
                 _ => {}
             }
-
         }
 
         Ok(())
@@ -150,6 +143,7 @@ impl Drop for DeviceManager {
         debug!("Total analyzed EtherCAT frames: {}", self.num_frames);
         for (i, device) in self.devices.iter_mut().enumerate() {
             debug!("SubDevice {}: {}", i, device.identifier());
+            // debug!("subdevice {}: {:?}", i, device.configured_address())
         }
     }
 }
@@ -384,28 +378,6 @@ impl Command for AprdCommand {
             }
             esm_result?;
         }
-
-        // for (i, (returned_data, reg_data)) in datagram.payload()[0..data_len]
-        //     .iter()
-        //     .zip(device_manager.devices[subdevice_index].read_reg(reg_addr, data_len as u16))
-        //     .enumerate()
-        // {
-        //     if let Some(reg_byte) = reg_data {
-        //         if *returned_data != reg_byte {
-        //             debug!(
-        //                 "#{} APRD data mismatch at SubDevice {} reg {:#06x}: expected {:#04x}, got {:#04x}",
-        //                 device_manager.num_frames,
-        //                 subdevice_index, reg_addr + i as u16, reg_byte, *returned_data
-        //             );
-        //         }
-        //     } else {
-        //         debug!(
-        //             "#{} APRD data missing at SubDevice {} reg {:#06x}",
-        //             device_manager.num_frames,
-        //             subdevice_index, reg_addr + i as u16
-        //         );
-        //     }
-        // }
 
         Ok(())
     }
