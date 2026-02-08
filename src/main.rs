@@ -62,6 +62,9 @@ fn main() -> Result<()> {
                 .with_context(|| format!("Failed to open pcap file: {}", &file.file_path))?;
 
             packet_source::start_read_pcap(file_in, file_out, file.is_pcapng, running_flag.clone())
+                .with_context(|| {
+                    format!("Failed to start reading pcap file: {}", &file.file_path)
+                })?
         }
 
         PcapSource::Interface(interface) => {
@@ -74,14 +77,16 @@ fn main() -> Result<()> {
             })
             .expect("Error setting Ctrl-C handler");
 
-            let interface = packet_source::get_interface(interface)
-                .map_err(|e| anyhow!("{}", e))
-                .with_context(
-                    || "Failed to get network interface. Use -D to see available interfaces.",
-                )?;
+            let interface = packet_source::get_interface(interface).with_context(
+                || "Failed to get network interface. Use -D to see available interfaces.",
+            )?;
 
             debug!("Using network interface: {}", interface.name);
-            packet_source::start_packet_receive(interface, file_out, (running_flag.clone(), abort_rx))?
+            packet_source::start_packet_receive(
+                interface,
+                file_out,
+                (running_flag.clone(), abort_rx),
+            )?
         }
     };
 

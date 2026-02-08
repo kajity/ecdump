@@ -12,7 +12,7 @@ use pnet::packet::ethernet::EthernetPacket;
 use pnet::util::MacAddr;
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{ BufWriter};
+use std::io::BufWriter;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -74,7 +74,13 @@ pub fn get_interface(ifname: Option<String>) -> Result<NetworkInterface> {
     };
     let interface = pnet::datalink::interfaces()
         .into_iter()
-        .find(|iface| iface.name.contains(&ifname))
+        .find(|iface| {
+            if cfg!(target_os = "windows") {
+                iface.name.contains(&ifname)
+            } else {
+                iface.name.starts_with(&ifname)
+            }
+        })
         .ok_or_else(|| anyhow!("Network interface not found: {}", ifname.clone()))?;
     Ok(interface)
 }
@@ -199,7 +205,7 @@ pub fn start_read_pcap(
     output_file: Option<BufWriter<File>>,
     is_pcapng: bool,
     running: Arc<AtomicBool>,
-) -> (JoinHandle<()>, CbSender<BytesMut>, CbReceiver<CapturedData>) {
+) -> Result<(JoinHandle<()>, CbSender<BytesMut>, CbReceiver<CapturedData>)> {
     let channel_size = 0;
     let (tx_data, rx_data) = bounded(channel_size);
     let (tx_recycle, rx_recycle) = unbounded();
@@ -256,8 +262,8 @@ pub fn start_read_pcap(
             }
         })
     } else {
+        let mut pcap_reader = pcap::PcapReader::new(pcap_file)?;
         std::thread::spawn(move || {
-            let mut pcap_reader = pcap::PcapReader::new(pcap_file).expect("PCAP Reader");
             let mut initial_frame = true;
             let mut src_mac = MacAddr::zero();
             let mut initial_timestamp = Duration::from_secs(0);
@@ -321,5 +327,5 @@ pub fn start_read_pcap(
             }
         })
     };
-    (handle, tx_recycle, rx_data)
+    Ok((handle, tx_recycle, rx_data))
 }
