@@ -15,20 +15,11 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-pub struct PcapFileConfig {
-    pub file_path: String,
-    pub is_pcapng: bool,
-}
 
 pub struct CapturedData {
     pub timestamp: Duration,
     pub from_main: bool,
     pub data: Bytes,
-}
-
-pub enum PcapSource {
-    Interface(Option<String>),
-    File(PcapFileConfig),
 }
 
 pub struct NetworkInterfaceInfo {

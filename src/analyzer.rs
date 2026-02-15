@@ -8,8 +8,7 @@ use ecdump::ec_packet::{ECCommand, ECCommands, ECDatagram, ECPacketError};
 use ecdump::subdevice::{self, ESMError, SubDevice};
 
 #[derive(Debug)]
-pub enum ECError {
-    InvalidDatagram(ECPacketError),
+pub enum ECDeviceError {
     InvalidAutoIncrementAddress(u16),
     InvalidConfiguredAddress(u16),
     InvalidWkc {
@@ -22,6 +21,12 @@ pub enum ECError {
     },
     ESMError(ESMError),
     UnsupportedCommand,
+}
+
+#[derive(Debug)]
+pub enum ECError {
+    InvalidDatagram(ECPacketError),
+    DeviceError(Vec<ECDeviceError>),
 }
 
 pub struct DeviceManager {
@@ -64,6 +69,7 @@ impl DeviceManager {
             );
         }
 
+        let mut errors = Vec::<ECDeviceError>::new();
         for datagram in datagrams.iter() {
             let result = match datagram.command() {
                 ECCommands::BRD => BrdCommand {
@@ -100,19 +106,19 @@ impl DeviceManager {
             };
 
             match result {
-                Err(ECError::InvalidAutoIncrementAddress(addr)) => {
+                Err(ECDeviceError::InvalidAutoIncrementAddress(addr)) => {
                     warn!(
                         "Invalid auto-increment address {:#06x} in frame #{}",
                         addr, self.num_frames
                     );
                 }
-                Err(ECError::InvalidConfiguredAddress(addr)) => {
+                Err(ECDeviceError::InvalidConfiguredAddress(addr)) => {
                     warn!(
                         "Invalid configured address {:#06x} in frame #{}",
                         addr, self.num_frames
                     );
                 }
-                Err(ECError::InvalidWkc {
+                Err(ECDeviceError::InvalidWkc {
                     packet_number,
                     command,
                     from_main,
@@ -132,9 +138,17 @@ impl DeviceManager {
                 }
                 _ => {}
             }
+
+            if let Err(err) = result {
+                errors.push(err);
+            }
         }
 
-        Ok(())
+        if errors.len() == 0 {
+            Ok(())
+        } else {
+            Err(ECError::DeviceError(errors))
+        }
     }
 }
 
@@ -153,13 +167,13 @@ trait Command {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         if self.uninitialized(device_manager, datagram) {
             return Ok(());
         }
 
         if !self.check_wkc(device_manager, datagram) {
-            return Err(ECError::InvalidWkc {
+            return Err(ECDeviceError::InvalidWkc {
                 packet_number: device_manager.num_frames,
                 command: datagram.command(),
                 from_main: self.from_main(),
@@ -176,7 +190,7 @@ trait Command {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError>;
+    ) -> Result<(), ECDeviceError>;
 
     fn uninitialized(&self, device_manager: &mut DeviceManager, datagram: &ECDatagram) -> bool {
         device_manager.uninitialized
@@ -198,7 +212,7 @@ impl Command for BrdCommand {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         if !self.from_main {
             for device in device_manager.devices.iter_mut() {
                 let reg_addr = datagram.address().1;
@@ -207,7 +221,7 @@ impl Command for BrdCommand {
 
                 device
                     .state_machine_step::<subdevice::BrdCommandStepper>(device_manager.num_frames)
-                    .map_err(ECError::ESMError)?;
+                    .map_err(ECDeviceError::ESMError)?;
             }
         }
 
@@ -256,7 +270,7 @@ impl Command for BwrCommand {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         if !self.from_main {
             return Ok(());
         }
@@ -296,7 +310,7 @@ impl Command for ApwrCommand {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         let auto_increment_addr = datagram.address().0;
         let subdevice_index = if self.from_main {
             0_u16.wrapping_sub(auto_increment_addr) as usize
@@ -307,7 +321,9 @@ impl Command for ApwrCommand {
                 .wrapping_sub(auto_increment_addr as usize)
         };
         if subdevice_index >= device_manager.devices.len() {
-            return Err(ECError::InvalidAutoIncrementAddress(auto_increment_addr));
+            return Err(ECDeviceError::InvalidAutoIncrementAddress(
+                auto_increment_addr,
+            ));
         }
 
         if !self.from_main {
@@ -347,7 +363,7 @@ impl Command for AprdCommand {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         let auto_increment_addr = datagram.address().0;
         let subdevice_index = if self.from_main {
             0_u16.wrapping_sub(auto_increment_addr) as usize
@@ -358,7 +374,9 @@ impl Command for AprdCommand {
                 .wrapping_sub(auto_increment_addr as usize)
         };
         if subdevice_index >= device_manager.devices.len() {
-            return Err(ECError::InvalidAutoIncrementAddress(auto_increment_addr));
+            return Err(ECDeviceError::InvalidAutoIncrementAddress(
+                auto_increment_addr,
+            ));
         }
 
         if !self.from_main {
@@ -369,7 +387,7 @@ impl Command for AprdCommand {
 
             let esm_result = device
                 .state_machine_step::<subdevice::AprdCommandStepper>(device_manager.num_frames)
-                .map_err(ECError::ESMError);
+                .map_err(ECDeviceError::ESMError);
 
             if let Some(configured_address) = device.configured_address() {
                 device_manager
@@ -409,7 +427,7 @@ impl Command for FpwrCommand {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         if !self.from_main {
             return Ok(());
         }
@@ -418,7 +436,7 @@ impl Command for FpwrCommand {
         let device = &mut device_manager.devices[*device_manager
             .config_address_map
             .get(&configured_address)
-            .ok_or(ECError::InvalidConfiguredAddress(configured_address))?];
+            .ok_or(ECDeviceError::InvalidConfiguredAddress(configured_address))?];
 
         let reg_addr = datagram.address().1;
         let data = &datagram.payload()[0..datagram.length() as usize];
@@ -454,12 +472,12 @@ impl Command for FprdCommand {
         &self,
         device_manager: &mut DeviceManager,
         datagram: &ECDatagram,
-    ) -> Result<(), ECError> {
+    ) -> Result<(), ECDeviceError> {
         let configured_address = datagram.address().0;
         let subdevice = &mut device_manager.devices[*device_manager
             .config_address_map
             .get(&configured_address)
-            .ok_or(ECError::InvalidConfiguredAddress(configured_address))?];
+            .ok_or(ECDeviceError::InvalidConfiguredAddress(configured_address))?];
 
         if !self.from_main {
             let reg_addr = datagram.address().1;
@@ -468,7 +486,7 @@ impl Command for FprdCommand {
 
             subdevice
                 .state_machine_step::<subdevice::FprdCommandStepper>(device_manager.num_frames)
-                .map_err(ECError::ESMError)?;
+                .map_err(ECDeviceError::ESMError)?;
         }
 
         Ok(())

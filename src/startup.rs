@@ -1,6 +1,5 @@
-
-use crate::packet_source::{PcapFileConfig, PcapSource};
-use clap::Parser;
+use clap::error::ErrorKind;
+use clap::{CommandFactory, Parser};
 use fern::colors::{Color, ColoredLevelConfig};
 
 pub struct Config {
@@ -11,16 +10,26 @@ pub struct Config {
     pub output_file: Option<String>,
 }
 
+pub enum PcapSource {
+    Interface(Option<String>),
+    File(PcapFileConfig),
+}
+
+pub struct PcapFileConfig {
+    pub file_path: String,
+    pub is_pcapng: bool,
+}
+
 pub fn parse_args() -> Config {
     #[derive(Parser, Debug)]
-    #[command(name = "ecdump", about = "An EtherCAT network dumper", version)]
+    #[command(name = "ecdump", about = "An EtherCAT network analyzer", version)]
     struct Cli {
         /// Set the input file path
         #[arg(short, long)]
         file: Option<String>,
 
         /// Set the output file path
-        #[arg(short, long)]
+        #[arg(short, long, value_name = "FILE")]
         write: Option<String>,
 
         /// Set the network interface name
@@ -36,11 +45,20 @@ pub fn parse_args() -> Config {
         /// Enable verbose reporting (can be used multiple times for increased verbosity)
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
-        
+
         #[arg(short, long, hide = true, action = clap::ArgAction::Count)]
         debug: u8,
     }
     let args = Cli::parse();
+
+    if args.file.is_some() && args.interface.is_some() {
+        let mut cmd = Cli::command();
+        cmd.error(
+            ErrorKind::ArgumentConflict,
+            "Cannot specify both --file and --interface options at the same time",
+        )
+        .exit();
+    }
 
     let pcap_source = if let Some(file) = args.file {
         let is_pcapng = file.to_lowercase().ends_with(".pcapng");

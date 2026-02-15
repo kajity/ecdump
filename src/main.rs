@@ -3,13 +3,15 @@ mod logger;
 mod packet_source;
 mod startup;
 
-use anyhow::{Context, Result, anyhow, bail};
+use analyzer::ECError;
+use anyhow::{Context, Result};
 use bytes::BytesMut;
 use console::style;
 use crossbeam_channel::{bounded, select};
 use ecdump::ec_packet;
 use log::{debug, error, warn};
-use packet_source::{CapturedData, PcapSource};
+use packet_source::CapturedData;
+use startup::PcapSource;
 use std::fs::File;
 use std::io::BufWriter;
 
@@ -38,7 +40,7 @@ fn main() -> Result<()> {
         Some(path) => {
             if let PcapSource::File(file_in) = &config.pcap_source {
                 if file_in.file_path == *path {
-                    bail!("Output file path must be different from input file path");
+                    anyhow::bail!("Output file path must be different from input file path");
                 }
             }
             let file_out = File::create(path)
@@ -109,11 +111,15 @@ fn main() -> Result<()> {
                             }
                         };
 
-                        let _ = device_manager
-                            .analyze_packet(&ethercat_packet, timestamp, from_main)
-                            .map_err(|e| error!("{:?}", e));
+                        let result = device_manager
+                            .analyze_packet(&ethercat_packet, timestamp, from_main);
 
                         tx_buffer.send(BytesMut::from(packet)).ok();
+
+                        if let Err(error) = result {
+                            report_errors(error);
+                        }
+
                     }
                     Err(_) => {
                         break;
@@ -132,4 +138,31 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn report_errors(error: ECError) {
+    match error {
+        ECError::DeviceError(errors) => {
+            for err in errors {
+                match err {
+                    analyzer::ECDeviceError::InvalidWkc {
+                        packet_number,
+                        command,
+                        from_main,
+                        timestamp,
+                        expected,
+                        actual,
+                    } => {
+                        let direction = if from_main {
+                            "Main -> Device"
+                        } else {
+                            "Device -> Main"
+                        };
+                    }
+                    _ => {}
+                }
+            }
+        }
+        _ => {}
+    }
 }
