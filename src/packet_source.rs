@@ -26,25 +26,24 @@ pub struct NetworkInterfaceInfo {
     pub name: String,
     pub description: String,
     pub oper_state: OperState,
+    pub is_default: bool,
 }
 
-pub fn get_interface_list() -> Vec<NetworkInterfaceInfo> {
+pub fn get_interface_list() -> impl Iterator<Item = NetworkInterfaceInfo> {
     let interfaces = pnet::datalink::interfaces(); // get list from pnet
     let interface_with_oper_state = netdev::get_interfaces();
-    interfaces
-        .into_iter()
-        .map(|iface| {
-            let oper_state = interface_with_oper_state
-                .iter()
-                .find(|i| i.index == iface.index)
-                .map_or(OperState::Unknown, |i| i.oper_state);
-            NetworkInterfaceInfo {
-                name: iface.name,
-                description: iface.description,
-                oper_state,
-            }
-        })
-        .collect()
+    interfaces.into_iter().map(move |iface| {
+        let (oper_state, is_default) = interface_with_oper_state
+            .iter()
+            .find(|i| i.index == iface.index)
+            .map_or((OperState::Unknown, false), |i| (i.oper_state, i.default));
+        NetworkInterfaceInfo {
+            name: iface.name,
+            description: iface.description,
+            oper_state,
+            is_default,
+        }
+    })
 }
 
 pub fn get_interface(ifname: Option<String>) -> Result<NetworkInterface> {

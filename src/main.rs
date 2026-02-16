@@ -20,16 +20,15 @@ fn main() -> Result<()> {
 
     if config.list_interfaces {
         println!("{}", style("Available network interfaces:").green());
-        packet_source::get_interface_list()
-            .into_iter()
-            .for_each(|iface| {
-                println!(
-                    " | {} : {} [{}]",
-                    iface.name,
-                    iface.description,
-                    iface.oper_state.as_str()
-                );
-            });
+        packet_source::get_interface_list().for_each(|iface| {
+            println!(
+                " | {} : {} [{}{}]",
+                iface.name,
+                iface.description,
+                iface.oper_state.as_str(),
+                if iface.is_default { ", default" } else { "" },
+            );
+        });
         return Ok(());
     }
 
