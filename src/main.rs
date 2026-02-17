@@ -15,6 +15,8 @@ use startup::PcapSource;
 use std::fs::File;
 use std::io::BufWriter;
 
+use crate::analyzer::ECDeviceError;
+
 fn main() -> Result<()> {
     let config = startup::parse_args();
 
@@ -68,16 +70,16 @@ fn main() -> Result<()> {
         }
 
         PcapSource::Interface(interface) => {
+            let interface = packet_source::get_interface(interface).with_context(
+                || "Failed to get network interface. Use -D to see available interfaces.",
+            )?;
+
             let (abort_tx2, abort_rx2) = bounded::<bool>(0);
             ctrlc::set_handler(move || {
                 abort_tx2.send(true).ok();
                 abort_tx.send(true).ok();
             })
             .expect("Error setting Ctrl-C handler");
-
-            let interface = packet_source::get_interface(interface).with_context(
-                || "Failed to get network interface. Use -D to see available interfaces.",
-            )?;
 
             debug!("Using network interface: {}", interface.name);
             packet_source::start_packet_receive(interface, file_out, abort_rx2)?
@@ -141,10 +143,13 @@ fn main() -> Result<()> {
 
 fn report_errors(error: ECError) {
     match error {
+        ECError::InvalidDatagram(e) => {
+            error!("Invalid EtherCAT datagram: {:?}", e);
+        }
         ECError::DeviceError(errors) => {
             for err in errors {
                 match err {
-                    analyzer::ECDeviceError::InvalidWkc {
+                    ECDeviceError::InvalidWkc {
                         packet_number,
                         command,
                         from_main,
@@ -158,10 +163,12 @@ fn report_errors(error: ECError) {
                             "Device -> Main"
                         };
                     }
+                    ECDeviceError::ESMError(esm_error) => {
+                        error!("ESM error: {:?}", esm_error);
+                    }
                     _ => {}
                 }
             }
         }
-        _ => {}
     }
 }

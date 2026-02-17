@@ -20,7 +20,6 @@ pub enum ECDeviceError {
         actual: u16,
     },
     ESMError(ESMError),
-    UnsupportedCommand,
 }
 
 #[derive(Debug)]

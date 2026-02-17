@@ -103,11 +103,13 @@ pub fn start_packet_receive(
     std::thread::Builder::new()
         .name("Packet Capture".to_string())
         .spawn(move || {
-            let timestamp = Instant::now();
-            // while running.load(Ordering::SeqCst) {
+            let time_init = Instant::now();
+            let mut initial_frame = true;
+            let mut src_mac = MacAddr::zero();
             loop {
                 match datalink_rx.next() {
                     Ok(packet) => {
+                        let timestamp = time_init.elapsed();
                         let packet = EthernetPacket::new(packet);
                         let ethercat_packet = match packet {
                             // Some(eth) if eth.get_ethertype().0 == 0x88a4 => eth,
@@ -126,12 +128,20 @@ pub fn start_packet_receive(
                             let send_data = buffer.freeze();
                             tx_data_writer
                                 .send(CapturedData {
-                                    timestamp: timestamp.elapsed(),
+                                    timestamp,
                                     from_main: false,
                                     data: send_data,
                                 })
                                 .ok();
                         }
+
+                        let from_main = if initial_frame {
+                            src_mac = ethercat_packet.get_source();
+                            initial_frame = false;
+                            true
+                        } else {
+                            ethercat_packet.get_source() == src_mac
+                        };
 
                         let ethercat_packet = ethercat_packet.payload();
                         let mut buffer = match rx_recycle.try_recv() {
@@ -144,8 +154,8 @@ pub fn start_packet_receive(
                         let ethercat_packet = buffer.freeze();
                         if tx_data
                             .send(CapturedData {
-                                timestamp: timestamp.elapsed(),
-                                from_main: false,
+                                timestamp,
+                                from_main,
                                 data: ethercat_packet,
                             })
                             .is_err()
