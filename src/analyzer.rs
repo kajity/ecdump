@@ -149,6 +149,10 @@ impl DeviceManager {
             Err(ECError::DeviceError(errors))
         }
     }
+
+    pub fn get_frame_count(&self) -> u64 {
+        self.num_frames
+    }
 }
 
 impl Drop for DeviceManager {

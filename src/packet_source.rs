@@ -112,8 +112,7 @@ pub fn start_packet_receive(
                         let timestamp = time_init.elapsed();
                         let packet = EthernetPacket::new(packet);
                         let ethercat_packet = match packet {
-                            // Some(eth) if eth.get_ethertype().0 == 0x88a4 => eth,
-                            Some(eth) => eth,
+                            Some(eth) if eth.get_ethertype().0 == 0x88a4 => eth,
                             _ => continue,
                         };
 

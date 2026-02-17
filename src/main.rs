@@ -1,4 +1,5 @@
 mod analyzer;
+mod error_formatter;
 mod logger;
 mod packet_source;
 mod startup;
@@ -9,6 +10,7 @@ use bytes::BytesMut;
 use console::style;
 use crossbeam_channel::{bounded, select};
 use ecdump::ec_packet;
+use error_formatter::ErrorFormatter;
 use log::{debug, error, warn};
 use packet_source::CapturedData;
 use startup::PcapSource;
@@ -36,6 +38,7 @@ fn main() -> Result<()> {
 
     startup::set_up_logging(config.debug);
 
+    let error_formatter = ErrorFormatter::new(config.verbose);
     let (abort_tx, abort_rx) = bounded::<bool>(0);
     let file_out = match &config.output_file {
         Some(path) => {
@@ -87,6 +90,7 @@ fn main() -> Result<()> {
     };
 
     let mut device_manager = analyzer::DeviceManager::new();
+    let mut total_errors = 0;
 
     loop {
         if abort_rx.try_recv().is_ok() {
@@ -118,7 +122,11 @@ fn main() -> Result<()> {
                         tx_buffer.send(BytesMut::from(packet)).ok();
 
                         if let Err(error) = result {
-                            report_errors(error);
+                            total_errors += match &error {
+                                ECError::DeviceError(errors) => errors.len(),
+                                _ => 1,
+                            };
+                            error_formatter.report(error);
                         }
 
                     }
@@ -138,37 +146,7 @@ fn main() -> Result<()> {
         }
     }
 
-    Ok(())
-}
+    error_formatter.print_summary(device_manager.get_frame_count(), total_errors);
 
-fn report_errors(error: ECError) {
-    match error {
-        ECError::InvalidDatagram(e) => {
-            error!("Invalid EtherCAT datagram: {:?}", e);
-        }
-        ECError::DeviceError(errors) => {
-            for err in errors {
-                match err {
-                    ECDeviceError::InvalidWkc {
-                        packet_number,
-                        command,
-                        from_main,
-                        timestamp,
-                        expected,
-                        actual,
-                    } => {
-                        let direction = if from_main {
-                            "Main -> Device"
-                        } else {
-                            "Device -> Main"
-                        };
-                    }
-                    ECDeviceError::ESMError(esm_error) => {
-                        error!("ESM error: {:?}", esm_error);
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
+    Ok(())
 }
