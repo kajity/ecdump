@@ -17,8 +17,6 @@ use startup::PcapSource;
 use std::fs::File;
 use std::io::BufWriter;
 
-use crate::analyzer::ECDeviceError;
-
 fn main() -> Result<()> {
     let config = startup::parse_args();
 
@@ -38,7 +36,7 @@ fn main() -> Result<()> {
 
     startup::set_up_logging(config.debug);
 
-    let error_formatter = ErrorFormatter::new(config.verbose);
+    let mut error_formatter = ErrorFormatter::new(config.verbose);
     let (abort_tx, abort_rx) = bounded::<bool>(0);
     let file_out = match &config.output_file {
         Some(path) => {
@@ -146,7 +144,15 @@ fn main() -> Result<()> {
         }
     }
 
-    error_formatter.print_summary(device_manager.get_frame_count(), total_errors);
+    error_formatter.report_aggregations(device_manager.get_error_aggregations());
+
+    error_formatter.report_correlations(device_manager.get_error_correlations());
+
+    error_formatter.print_summary(
+        device_manager.get_frame_count(),
+        device_manager.get_error_aggregations(),
+        device_manager.get_error_correlations(),
+    );
 
     Ok(())
 }

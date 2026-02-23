@@ -17,9 +17,8 @@ pub enum ECState {
     Bootstrap = 0x03,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ESMError {
-    HasError,
     IllegalTransition {
         to: ECState,
     },
@@ -39,6 +38,7 @@ pub enum ESMError {
     },
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SubdeviceIdentifier {
     Alias(u16),
     Address(u16),
@@ -55,6 +55,7 @@ impl fmt::Display for SubdeviceIdentifier {
     }
 }
 
+#[derive(Debug)]
 pub struct SubDevice {
     state: ECState,
     has_esm_error: bool,
@@ -275,13 +276,6 @@ pub trait CommandStepper {
                         }
 
                         if new_state < old_state {
-                            info!(
-                                "#{} SubDevice {} state changed backward from {:?} to {:?}",
-                                packet_num,
-                                subdevice.identifier(),
-                                old_state,
-                                new_state
-                            );
                             subdevice.has_esm_error = true;
                             subdevice.load_al_status_code();
                             return Err(ESMError::BackwardTransition {
