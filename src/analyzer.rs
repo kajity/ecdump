@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, trace, warn};
 
 use crate::ec_packet::ECFrame;
 use ecdump::ec_packet::{ECCommand, ECCommands, ECDatagram, ECPacketError};
-use ecdump::subdevice::{self, ESMError, SubDevice, SubdeviceIdentifier};
+use ecdump::subdevice::{self, ECState, ESMError, SubDevice, SubdeviceIdentifier};
 
 #[derive(Debug, Copy, Clone)]
 pub struct WkcErrorDetail {
@@ -46,6 +46,164 @@ pub enum ECDeviceError {
     ESMError(ESMErrorDetail),
 }
 
+#[allow(dead_code)]
+impl ECDeviceError {
+    /// Returns a human-readable category name for this error type.
+    pub fn category_name(&self) -> &'static str {
+        match self {
+            ECDeviceError::InvalidAutoIncrementAddress { .. } => "Auto-Increment Addr",
+            ECDeviceError::InvalidConfiguredAddress { .. } => "Configured Addr",
+            ECDeviceError::InvalidWkc(_) => "WKC Mismatch",
+            ECDeviceError::ESMError(_) => "ESM Error",
+        }
+    }
+
+    /// Returns the timestamp associated with this error.
+    pub fn timestamp(&self) -> Duration {
+        match self {
+            ECDeviceError::InvalidAutoIncrementAddress { timestamp, .. } => *timestamp,
+            ECDeviceError::InvalidConfiguredAddress { timestamp, .. } => *timestamp,
+            ECDeviceError::InvalidWkc(d) => d.timestamp,
+            ECDeviceError::ESMError(d) => d.timestamp,
+        }
+    }
+
+    /// Returns the packet/frame number associated with this error.
+    pub fn packet_number(&self) -> u64 {
+        match self {
+            ECDeviceError::InvalidAutoIncrementAddress { packet_number, .. } => *packet_number,
+            ECDeviceError::InvalidConfiguredAddress { packet_number, .. } => *packet_number,
+            ECDeviceError::InvalidWkc(d) => d.packet_number,
+            ECDeviceError::ESMError(d) => d.packet_number,
+        }
+    }
+
+    /// Returns the subdevice identifier if available.
+    pub fn subdevice_id(&self) -> Option<SubdeviceIdentifier> {
+        match self {
+            ECDeviceError::InvalidAutoIncrementAddress { .. } => None,
+            ECDeviceError::InvalidConfiguredAddress { .. } => None,
+            ECDeviceError::InvalidWkc(d) => d.subdevice_id,
+            ECDeviceError::ESMError(d) => Some(d.subdevice_id),
+        }
+    }
+
+    /// Returns the command type associated with this error.
+    pub fn command(&self) -> ECCommand {
+        match self {
+            ECDeviceError::InvalidAutoIncrementAddress { command, .. } => *command,
+            ECDeviceError::InvalidConfiguredAddress { command, .. } => *command,
+            ECDeviceError::InvalidWkc(d) => d.command,
+            ECDeviceError::ESMError(d) => d.command,
+        }
+    }
+
+    /// Returns a short diagnostic description for this specific error instance.
+    pub fn diagnosis(&self) -> String {
+        match self {
+            ECDeviceError::InvalidAutoIncrementAddress { address, .. } => {
+                format!(
+                    "Auto-increment address {:#06x} does not map to any known device. \
+                     Possible cause: device disconnected or topology change.",
+                    address
+                )
+            }
+            ECDeviceError::InvalidConfiguredAddress { address, .. } => {
+                format!(
+                    "Configured address {:#06x} not found in device map. \
+                     Possible cause: device not yet configured or address conflict.",
+                    address
+                )
+            }
+            ECDeviceError::InvalidWkc(d) => {
+                if d.actual == 0 {
+                    format!(
+                        "WKC=0 (expected {}): Complete communication failure — \
+                         no device responded to {} command. \
+                         Check: cable connections, device power, network topology.",
+                        d.expected,
+                        d.command.as_str()
+                    )
+                } else if d.actual < d.expected {
+                    let missing = d.expected - d.actual;
+                    format!(
+                        "WKC={} (expected {}): {} device(s) did not respond to {} command. \
+                         Partial failure — check individual device status and wiring.",
+                        d.actual,
+                        d.expected,
+                        missing,
+                        d.command.as_str()
+                    )
+                } else {
+                    format!(
+                        "WKC={} (expected {}): Unexpected extra responses to {} command. \
+                         Possible address conflict or duplicate device configuration.",
+                        d.actual,
+                        d.expected,
+                        d.command.as_str()
+                    )
+                }
+            }
+            ECDeviceError::ESMError(d) => {
+                let base = match &d.error {
+                    ESMError::IllegalTransition { to } => {
+                        format!("Illegal state transition to {:?}.", to)
+                    }
+                    ESMError::InvalidStateTransition { requested, current } => {
+                        format!(
+                            "Invalid state transition: requested {:?} but device is in {:?}.",
+                            requested, current
+                        )
+                    }
+                    ESMError::BackwardTransition {
+                        from,
+                        to,
+                        has_error,
+                    } => {
+                        let err_hint = if *has_error {
+                            " Device reported an error flag."
+                        } else {
+                            ""
+                        };
+                        format!(
+                            "Backward state transition {:?} → {:?}.{} \
+                             The device may have encountered an internal fault.",
+                            from, to, err_hint
+                        )
+                    }
+                    ESMError::TransitionFailed {
+                        requested,
+                        current,
+                        has_error,
+                    } => {
+                        let err_hint = if *has_error {
+                            " Error flag is set."
+                        } else {
+                            ""
+                        };
+                        format!(
+                            "State transition to {:?} failed; device stuck in {:?}.{} \
+                             Check AL Status Code for details.",
+                            requested, current, err_hint
+                        )
+                    }
+                };
+                format!("[{}] {}", d.subdevice_id, base)
+            }
+        }
+    }
+}
+
+/// Represents a successful state transition observed on a subdevice.
+#[derive(Debug, Clone)]
+pub struct StateTransition {
+    pub packet_number: u64,
+    pub timestamp: Duration,
+    pub subdevice_id: SubdeviceIdentifier,
+    pub from: ECState,
+    pub to: ECState,
+}
+
 #[derive(Debug)]
 pub enum ECError {
     InvalidDatagram(ECPacketError),
@@ -56,6 +214,7 @@ pub enum ECError {
 pub struct ErrorCorrelation {
     pub wkc_error: WkcErrorDetail,
     pub esm_error: ESMErrorDetail,
+    #[allow(dead_code)] // used in debug! logging
     pub frame_gap: u64,
 }
 
@@ -66,8 +225,10 @@ pub struct DeviceManager {
     devices: Vec<SubDevice>,
     config_address_map: HashMap<u16, usize>,
     wkc_error_history: VecDeque<WkcErrorDetail>,
-    correlations: Vec<ErrorCorrelation>,
-    consecutive_same_errors: usize,
+    /// State transitions detected during the most recent analyze_packet call.
+    pending_transitions: Vec<StateTransition>,
+    /// Correlations detected during the most recent analyze_packet call.
+    pending_correlations: Vec<ErrorCorrelation>,
 }
 
 impl DeviceManager {
@@ -79,8 +240,8 @@ impl DeviceManager {
             devices: Vec::new(),
             config_address_map: HashMap::new(),
             wkc_error_history: VecDeque::new(),
-            correlations: Vec::new(),
-            consecutive_same_errors: 0,
+            pending_transitions: Vec::new(),
+            pending_correlations: Vec::new(),
         }
     }
 
@@ -104,6 +265,13 @@ impl DeviceManager {
                 d.length()
             );
         }
+
+        // Snapshot device states before processing datagrams
+        let states_before: Vec<(SubdeviceIdentifier, ECState)> = self
+            .devices
+            .iter()
+            .map(|d| (d.identifier(), d.state()))
+            .collect();
 
         let mut errors = Vec::<ECDeviceError>::new();
         for datagram in datagrams.iter() {
@@ -151,12 +319,13 @@ impl DeviceManager {
                         "Invalid auto-increment address {:#06x} in frame #{}",
                         address, packet_number
                     );
-                    errors.push(ECDeviceError::InvalidAutoIncrementAddress {
+                    let err = ECDeviceError::InvalidAutoIncrementAddress {
                         packet_number,
                         timestamp,
                         command: datagram.command(),
                         address,
-                    });
+                    };
+                    errors.push(err);
                 }
                 Err(ECDeviceError::InvalidConfiguredAddress {
                     packet_number,
@@ -167,12 +336,13 @@ impl DeviceManager {
                         "Invalid configured address {:#06x} in frame #{}",
                         address, packet_number
                     );
-                    errors.push(ECDeviceError::InvalidConfiguredAddress {
+                    let err = ECDeviceError::InvalidConfiguredAddress {
                         packet_number,
                         timestamp,
                         command: datagram.command(),
                         address,
-                    });
+                    };
+                    errors.push(err);
                 }
                 Err(ECDeviceError::InvalidWkc(wkc_err)) => {
                     warn!(
@@ -191,6 +361,10 @@ impl DeviceManager {
 
                     let err = ECDeviceError::InvalidWkc(wkc_err);
                     self.wkc_error_history.push_back(wkc_err);
+                    // Keep WKC history bounded
+                    if self.wkc_error_history.len() > 200 {
+                        self.wkc_error_history.pop_front();
+                    }
                     errors.push(err);
                 }
                 Err(ECDeviceError::ESMError(esm_error)) => {
@@ -198,10 +372,27 @@ impl DeviceManager {
                         "#{} ESM Error [{}]: {:?}",
                         esm_error.packet_number, esm_error.subdevice_id, esm_error.error
                     );
-                    errors.push(ECDeviceError::ESMError(esm_error));
+                    let err = ECDeviceError::ESMError(esm_error);
+                    errors.push(err);
                     self.correlate_esm_with_wkc(&esm_error);
                 }
                 _ => {}
+            }
+        }
+
+        // Detect state transitions by comparing before/after snapshots
+        for (i, (id, old_state)) in states_before.iter().enumerate() {
+            if i < self.devices.len() {
+                let new_state = self.devices[i].state();
+                if new_state != *old_state {
+                    self.pending_transitions.push(StateTransition {
+                        packet_number: self.num_frames,
+                        timestamp,
+                        subdevice_id: *id,
+                        from: *old_state,
+                        to: new_state,
+                    });
+                }
             }
         }
 
@@ -212,67 +403,45 @@ impl DeviceManager {
         }
     }
 
-    // TODO: ESMエラーとWKCエラーの関連性を分析するためのロジック
+    /// Correlate ESM errors with recent WKC errors on the same device.
     fn correlate_esm_with_wkc(&mut self, esm_error: &ESMErrorDetail) {
+        // Search backward through WKC history for matching subdevice
+        let mut best_match: Option<(WkcErrorDetail, u64)> = None;
+
         for wkc_err in self.wkc_error_history.iter().rev() {
-            if let Some(wkc_err_subdevice) = wkc_err.subdevice_id
-                && wkc_err_subdevice == esm_error.subdevice_id
-            {
-                let correlation = ErrorCorrelation {
-                    wkc_error: *wkc_err,
-                    esm_error: *esm_error,
-                    frame_gap: self.num_frames - wkc_err.packet_number,
-                };
-                self.correlations.push(correlation);
-                debug!(
-                    "Correlated ESM Error with WKC Error from frame #{} (gap: {} frames)",
-                    wkc_err.packet_number,
-                    self.num_frames - wkc_err.packet_number
-                );
-                break;
+            if let Some(wkc_err_subdevice) = wkc_err.subdevice_id {
+                if wkc_err_subdevice == esm_error.subdevice_id {
+                    let gap = esm_error
+                        .packet_number
+                        .saturating_sub(wkc_err.packet_number);
+
+                    // Prefer the closest (most recent) WKC error
+                    match &best_match {
+                        Some((_, existing_gap)) if gap >= *existing_gap => {}
+                        _ => {
+                            best_match = Some((*wkc_err, gap));
+                        }
+                    }
+                    // The first match from the end is the closest, so we can break
+                    break;
+                }
             }
         }
-    }
 
-    fn errors_are_same(err1: &ECDeviceError, err2: &ECDeviceError) -> bool {
-        match (err1, err2) {
-            (
-                ECDeviceError::InvalidAutoIncrementAddress { address: a1, .. },
-                ECDeviceError::InvalidAutoIncrementAddress { address: a2, .. },
-            ) => a1 == a2,
-            (
-                ECDeviceError::InvalidConfiguredAddress { address: a1, .. },
-                ECDeviceError::InvalidConfiguredAddress { address: a2, .. },
-            ) => a1 == a2,
-            (
-                ECDeviceError::InvalidWkc(WkcErrorDetail {
-                    command: cmd1,
-                    expected: e1,
-                    actual: a1,
-                    subdevice_id: s1,
-                    ..
-                }),
-                ECDeviceError::InvalidWkc(WkcErrorDetail {
-                    command: cmd2,
-                    expected: e2,
-                    actual: a2,
-                    subdevice_id: s2,
-                    ..
-                }),
-            ) => cmd1 == cmd2 && e1 == e2 && a1 == a2 && s1 == s2,
-            (
-                ECDeviceError::ESMError(ESMErrorDetail {
-                    error: e1,
-                    subdevice_id: s1,
-                    ..
-                }),
-                ECDeviceError::ESMError(ESMErrorDetail {
-                    error: e2,
-                    subdevice_id: s2,
-                    ..
-                }),
-            ) => std::mem::discriminant(e1) == std::mem::discriminant(e2) && s1 == s2,
-            _ => false,
+        if let Some((wkc_err, gap)) = best_match {
+            let correlation = ErrorCorrelation {
+                wkc_error: wkc_err,
+                esm_error: *esm_error,
+                frame_gap: gap,
+            };
+            debug!(
+                "Correlated ESM Error [{}] with WKC Error from frame #{} (gap: {} frames, time delta: {:.3}s)",
+                esm_error.subdevice_id,
+                wkc_err.packet_number,
+                gap,
+                (esm_error.timestamp.as_secs_f64() - wkc_err.timestamp.as_secs_f64()).abs()
+            );
+            self.pending_correlations.push(correlation);
         }
     }
 
@@ -280,16 +449,16 @@ impl DeviceManager {
         self.num_frames
     }
 
-    pub fn get_error_correlations(&self) -> &[ErrorCorrelation] {
-        &self.correlations
+    /// Take any pending state transitions detected during the last analyze_packet call.
+    /// This drains the internal buffer; each transition is returned only once.
+    pub fn take_state_transitions(&mut self) -> Vec<StateTransition> {
+        std::mem::take(&mut self.pending_transitions)
     }
 
-    pub fn has_burst_errors(&self) -> bool {
-        self.consecutive_same_errors > 5
-    }
-
-    pub fn get_consecutive_error_count(&self) -> usize {
-        self.consecutive_same_errors
+    /// Take any pending correlations detected during the last analyze_packet call.
+    /// This drains the internal buffer; each correlation is returned only once.
+    pub fn take_pending_correlations(&mut self) -> Vec<ErrorCorrelation> {
+        std::mem::take(&mut self.pending_correlations)
     }
 }
 
@@ -298,7 +467,6 @@ impl Drop for DeviceManager {
         debug!("Total analyzed EtherCAT frames: {}", self.num_frames);
         for (i, device) in self.devices.iter_mut().enumerate() {
             debug!("SubDevice {}: {}", i, device.identifier());
-            // debug!("subdevice {}: {:?}", i, device.configured_address())
         }
     }
 }
@@ -335,9 +503,9 @@ trait Command {
         datagram: &ECDatagram,
     ) -> Result<(), ECDeviceError>;
 
-    fn process_fallback(&self, manager: &mut DeviceManager, datagram: &ECDatagram) {}
+    fn process_fallback(&self, _manager: &mut DeviceManager, _datagram: &ECDatagram) {}
 
-    fn uninitialized(&self, manager: &mut DeviceManager, datagram: &ECDatagram) -> bool {
+    fn uninitialized(&self, manager: &mut DeviceManager, _datagram: &ECDatagram) -> bool {
         manager.uninitialized
     }
 
@@ -551,7 +719,7 @@ impl Command for ApwrCommand {
 }
 
 impl ApwrCommand {
-    fn get_idx_from_auto_increment_address<'a>(
+    fn get_idx_from_auto_increment_address(
         &self,
         manager: &DeviceManager,
         auto_increment_addr: u16,
@@ -687,17 +855,14 @@ impl Command for FpwrCommand {
         datagram: &ECDatagram,
     ) -> Result<(), ECDeviceError> {
         let (configured_address, ado) = datagram.address();
-        let subdevice_index = manager
-            .config_address_map
-            .get(&configured_address)
-            .ok_or_else(|| {
-                return ECDeviceError::InvalidConfiguredAddress {
-                    packet_number: manager.num_frames,
-                    timestamp: self.timestamp,
-                    command: datagram.command(),
-                    address: configured_address,
-                };
-            })?;
+        let subdevice_index = manager.config_address_map.get(&configured_address).ok_or(
+            ECDeviceError::InvalidConfiguredAddress {
+                packet_number: manager.num_frames,
+                timestamp: self.timestamp,
+                command: datagram.command(),
+                address: configured_address,
+            },
+        )?;
 
         if !self.from_main {
             let data = datagram.payload();
@@ -759,17 +924,14 @@ impl Command for FprdCommand {
         datagram: &ECDatagram,
     ) -> Result<(), ECDeviceError> {
         let (configured_address, ado) = datagram.address();
-        let subdevice_index = manager
-            .config_address_map
-            .get(&configured_address)
-            .ok_or_else(|| {
-                return ECDeviceError::InvalidConfiguredAddress {
-                    packet_number: manager.num_frames,
-                    timestamp: self.timestamp,
-                    command: datagram.command(),
-                    address: configured_address,
-                };
-            })?;
+        let subdevice_index = manager.config_address_map.get(&configured_address).ok_or(
+            ECDeviceError::InvalidConfiguredAddress {
+                packet_number: manager.num_frames,
+                timestamp: self.timestamp,
+                command: datagram.command(),
+                address: configured_address,
+            },
+        )?;
         let device = &mut manager.devices[*subdevice_index];
 
         if !self.from_main {

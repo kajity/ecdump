@@ -24,11 +24,13 @@ fn main() -> Result<()> {
         println!("{}", style("Available network interfaces:").green());
         packet_source::get_interface_list().for_each(|iface| {
             println!(
-                " | {} : {} [{}{}]",
-                iface.name,
-                iface.description,
-                iface.oper_state.as_str(),
-                if iface.is_default { ", default" } else { "" },
+                "{}",
+                ErrorFormatter::format_interface_line(
+                    &iface.name,
+                    &iface.description,
+                    iface.oper_state.as_str(),
+                    iface.is_default,
+                )
             );
         });
         return Ok(());
@@ -88,7 +90,6 @@ fn main() -> Result<()> {
     };
 
     let mut device_manager = analyzer::DeviceManager::new();
-    let mut total_errors = 0;
 
     loop {
         if abort_rx.try_recv().is_ok() {
@@ -119,12 +120,17 @@ fn main() -> Result<()> {
 
                         tx_buffer.send(BytesMut::from(packet)).ok();
 
+                        // Report state transitions immediately
+                        let transitions = device_manager.take_state_transitions();
+                        if !transitions.is_empty() {
+                            error_formatter.report_state_transitions(&transitions);
+                        }
+
+                        // Collect correlations detected during this packet
+                        let correlations = device_manager.take_pending_correlations();
+
                         if let Err(error) = result {
-                            total_errors += match &error {
-                                ECError::DeviceError(errors) => errors.len(),
-                                _ => 1,
-                            };
-                            error_formatter.report(error);
+                            error_formatter.report(error, &correlations);
                         }
 
                     }
@@ -144,14 +150,7 @@ fn main() -> Result<()> {
         }
     }
 
-    // error_formatter.report_aggregations(device_manager.get_error_aggregations());
-
-    error_formatter.report_correlations(device_manager.get_error_correlations());
-
-    error_formatter.print_summary(
-        device_manager.get_frame_count(),
-        device_manager.get_error_correlations(),
-    );
+    error_formatter.print_summary(device_manager.get_frame_count());
 
     Ok(())
 }

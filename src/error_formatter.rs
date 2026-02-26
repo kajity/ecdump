@@ -1,16 +1,9 @@
-use crossterm::QueueableCommand;
-use crossterm::cursor::MoveUp;
-use crossterm::execute;
-use crossterm::style::{Color, Print, ResetColor, SetForegroundColor};
-use crossterm::terminal::{Clear, ClearType};
-use std::collections::{HashMap, VecDeque};
-use std::io::{Write, stdout};
+use console::{Color, Style, Term, measure_text_width, style};
+use std::io::Write;
 use std::time::Duration;
 
-use crate::analyzer::{ECDeviceError, ECError, ErrorCorrelation};
+use crate::analyzer::{ECDeviceError, ECError, ErrorCorrelation, StateTransition, WkcErrorDetail};
 use ecdump::ec_packet::ECPacketError;
-use ecdump::subdevice::SubdeviceIdentifier;
-use log::info;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerboseLevel {
@@ -31,587 +24,477 @@ impl VerboseLevel {
     }
 }
 
-#[derive(Debug)]
-pub struct ErrorStats {
-    pub wkc_errors: usize,
-    pub esm_errors: usize,
-    pub address_errors: usize,
-    pub correlated_errors: usize,
-}
-
-#[derive(Debug, Clone)]
-struct ErrorEntry {
-    subdevice_id: SubdeviceIdentifier,
-    error_type: String,
-    count: usize,
-    last_frame: u64,
-    last_timestamp: Duration,
+/// Signature of the last displayed event, used for consecutive-dedup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EventSignature {
+    /// A string key that identifies "the same kind of event"
+    key: String,
+    /// The formatted single-line message (without repeat count)
+    base_message: String,
 }
 
 pub struct ErrorFormatter {
     verbose: VerboseLevel,
-    error_queue: VecDeque<String>,
-    last_output_lines: usize,
-    current_burst_count: usize,
-    showing_progress: bool,
-    start_time: std::time::Instant,
-    error_table: HashMap<String, ErrorEntry>, // key: "subdevice_id:error_type"
-    table_displayed: bool,
+    term: Term,
+    /// The signature of the most recently displayed event line.
+    last_event: Option<EventSignature>,
+    /// How many consecutive times the current event has been displayed.
+    repeat_count: usize,
+    /// Frame number of the first occurrence of the current repeated event.
+    repeat_first_frame: u64,
+    /// Timestamp of the first occurrence of the current repeated event.
+    repeat_first_ts: Duration,
+    /// Frame number of the most recent occurrence.
+    repeat_last_frame: u64,
+    /// Timestamp of the most recent occurrence.
+    repeat_last_ts: Duration,
+    /// Number of terminal lines occupied by the last printed repeat/event line.
+    last_printed_lines: usize,
 }
 
 impl ErrorFormatter {
     pub fn new(verbose_level: u8) -> Self {
         ErrorFormatter {
             verbose: VerboseLevel::from_u8(verbose_level),
-            error_queue: VecDeque::new(),
-            last_output_lines: 0,
-            current_burst_count: 0,
-            showing_progress: false,
-            start_time: std::time::Instant::now(),
-            error_table: HashMap::new(),
-            table_displayed: false,
+            term: Term::stdout(),
+            last_event: None,
+            repeat_count: 0,
+            repeat_first_frame: 0,
+            repeat_first_ts: Duration::ZERO,
+            repeat_last_frame: 0,
+            repeat_last_ts: Duration::ZERO,
+            last_printed_lines: 0,
         }
     }
 
-    pub fn report(&mut self, error: ECError) {
+    // ─── Public API: called during capture ───
+
+    /// Report errors detected in an EtherCAT frame. Called immediately during capture.
+    /// If correlations are provided, ESM errors will show their related WKC error as a sub-line.
+    pub fn report(&mut self, error: ECError, correlations: &[ErrorCorrelation]) {
         if self.verbose == VerboseLevel::Nothing {
             return;
         }
 
         match error {
             ECError::InvalidDatagram(e) => {
-                self.queue_datagram_error(&e);
-                self.flush_queue();
+                self.emit_datagram_error(&e);
             }
             ECError::DeviceError(errors) => {
-                for err in errors {
-                    self.handle_device_error(&err);
+                for err in &errors {
+                    self.emit_device_error(err, correlations);
                 }
             }
         }
     }
 
-    fn handle_device_error(&mut self, error: &ECDeviceError) {
-        // For ESM errors, aggregate into a table
-        if let ECDeviceError::ESMError(detail) = error {
-            let packet_number = detail.packet_number;
-            let timestamp = detail.timestamp;
-            let subdevice_id = &detail.subdevice_id;
-            let esm_err = &detail.error;
-
-            let error_type = format!("{:?}", esm_err);
-            let key = format!("{}:{}", subdevice_id, error_type);
-
-            if let Some(entry) = self.error_table.get_mut(&key) {
-                entry.count += 1;
-                entry.last_frame = packet_number;
-                entry.last_timestamp = timestamp;
-            } else {
-                self.error_table.insert(
-                    key.clone(),
-                    ErrorEntry {
-                        subdevice_id: subdevice_id.clone(),
-                        error_type: error_type.clone(),
-                        count: 1,
-                        last_frame: packet_number,
-                        last_timestamp: timestamp,
-                    },
-                );
-            }
-
-            // テーブルを更新表示
-            self.update_error_table();
-        } else {
-            // ESM以外のエラーは通常通り出力
-            self.queue_device_error(error);
-            self.flush_queue();
-        }
-    }
-
-    fn update_error_table(&mut self) {
-        if self.verbose == VerboseLevel::Nothing || self.error_table.is_empty() {
+    /// Report state transitions detected in an EtherCAT frame. Called immediately during capture.
+    pub fn report_state_transitions(&mut self, transitions: &[StateTransition]) {
+        if self.verbose == VerboseLevel::Nothing {
             return;
         }
 
-        let mut stdout = stdout();
-
-        // clear previous table output
-        self.clear_last_output();
-
-        // table header
-        let header =
-            "┌──────────────────────────────────────────────────────────────────────────────┐
-│ 📊 ESM Error Summary (Live)                                                  │
-├──────────────────┬────────────────────┬───────┬────────────┬─────────────────┤
-│ Subdevice        │ Error Type         │ Count │ Last Frame │ Last Time (s)   │
-├──────────────────┼────────────────────┼───────┼────────────┼─────────────────┤
-";
-        let footer =
-            "└──────────────────┴────────────────────┴───────┴────────────┴─────────────────┘
-";
-        stdout.queue(Print(header)).ok();
-        let mut header_lines = 5;
-
-        // エラーエントリをソート（subdevice_id順）
-        let mut entries: Vec<_> = self.error_table.values().collect();
-        entries.sort_by_key(|e| (&e.subdevice_id, &e.error_type));
-
-        for entry in entries {
-            let subdev_str = entry.subdevice_id.to_string();
-            let subdev_display = if subdev_str.len() > 16 {
-                format!("{}...", &subdev_str[..13])
-            } else {
-                subdev_str
-            };
-
-            let error_display = if entry.error_type.len() > 18 {
-                format!("{}...", &entry.error_type[..15])
-            } else {
-                entry.error_type.clone()
-            };
-
-            stdout
-                .queue(Print(format!(
-                    "│ {:<16} │ {:<18} │ {:>5} │ {:>10} │ {:>15.3} │\n",
-                    subdev_display,
-                    error_display,
-                    entry.count,
-                    entry.last_frame,
-                    entry.last_timestamp.as_secs_f64()
-                )))
-                .ok();
-            header_lines += 1;
-        }
-
-        stdout.queue(Print(footer)).ok();
-        header_lines += 1;
-
-        self.last_output_lines = header_lines;
-        self.table_displayed = true;
-        stdout.flush().ok();
-    }
-
-    pub fn finalize_table(&mut self) {
-        if self.table_displayed && !self.error_table.is_empty() {
-            // 最終的なテーブル表示（クリアしない）
-            println!(); // 改行して固定
-            self.table_displayed = false;
+        for tr in transitions {
+            self.emit_state_transition(tr);
         }
     }
 
-    // pub fn report_aggregations(&mut self, aggregations: &[ErrorAggregation]) {
-    //     if self.verbose == VerboseLevel::Nothing {
-    //         return;
-    //     }
-
-    //     // テーブル表示を終了
-    //     self.finalize_table();
-
-    //     for agg in aggregations {
-    //         if agg.count > 1 {
-    //             self.print_aggregated_error(agg);
-    //         } else {
-    //             self.print_single_error(&agg.error);
-    //         }
-    //     }
-    // }
-
-    pub fn report_correlations(&mut self, correlations: &[ErrorCorrelation]) {
-        info!("Reporting {} error correlations", correlations.len());
-        if self.verbose == VerboseLevel::Nothing || correlations.is_empty() {
+    /// Print a final summary line with frame count (called after capture ends).
+    pub fn print_summary(&mut self, total_frames: u64) {
+        if self.verbose == VerboseLevel::Nothing {
             return;
         }
 
-        println!();
-        self.print_separator();
-        self.print_colored("🔗 Error Correlations", Color::Yellow);
-        println!();
+        self.flush_repeat();
 
-        for (i, corr) in correlations.iter().enumerate() {
-            println!(
-                "  {}. ESM Error correlated with WKC Error (gap: {} frames)",
-                i + 1,
-                corr.frame_gap
-            );
+        println!();
+        self.print_heavy_separator();
+        println!("{}", style("  ■ capture complete").green().bold());
+        println!(
+            "{}",
+            style(format!("    {} frames analyzed", total_frames)).color256(244)
+        );
+        self.print_heavy_separator();
+    }
 
-            if self.verbose >= VerboseLevel::Detailed {
-                println!("     Analysis: ESM error likely resulted from preceding WKC mismatch");
-                let detail = &corr.wkc_error;
-                println!(
-                    "     WKC: {}[{}] (expected: {}, actual: {})",
-                    detail.command.as_str(),
-                    detail
+    // ─── Event emission ───
+
+    fn emit_datagram_error(&mut self, error: &ECPacketError) {
+        let detail = format!("{:?}", error);
+        let key = format!("datagram:{}", detail);
+        let msg = Self::format_tagged_line("DATAGRAM", &detail, None, None, Color::Red);
+        self.emit_event(key, msg, 0, Duration::ZERO);
+    }
+
+    fn emit_device_error(&mut self, error: &ECDeviceError, correlations: &[ErrorCorrelation]) {
+        let (key, msg, frame, ts, corr): (String, String, u64, Duration, Option<WkcErrorDetail>) =
+            match error {
+                ECDeviceError::InvalidAutoIncrementAddress {
+                    packet_number,
+                    timestamp,
+                    command,
+                    address,
+                } => {
+                    let key = format!("addr:auto_inc:{:#06x}:{}", address, command.as_str());
+                    let detail = format!(
+                        "{} auto-increment {:#06x} not found",
+                        command.as_str(),
+                        address
+                    );
+                    let msg = Self::format_tagged_line(
+                        "ADDR",
+                        &detail,
+                        Some(*packet_number),
+                        Some(*timestamp),
+                        Color::Yellow,
+                    );
+                    (key, msg, *packet_number, *timestamp, None)
+                }
+                ECDeviceError::InvalidConfiguredAddress {
+                    packet_number,
+                    timestamp,
+                    command,
+                    address,
+                } => {
+                    let key = format!("addr:config:{:#06x}:{}", address, command.as_str());
+                    let detail =
+                        format!("{} configured {:#06x} not found", command.as_str(), address);
+                    let msg = Self::format_tagged_line(
+                        "ADDR",
+                        &detail,
+                        Some(*packet_number),
+                        Some(*timestamp),
+                        Color::Yellow,
+                    );
+                    (key, msg, *packet_number, *timestamp, None)
+                }
+                ECDeviceError::InvalidWkc(d) => {
+                    let sub = d
                         .subdevice_id
-                        .unwrap_or(SubdeviceIdentifier::Unknown)
-                        .to_string(),
-                    detail.expected,
-                    detail.actual
-                );
-
-                println!("     ESM: {:?}", corr.esm_error.error);
-            }
-        }
-
-        println!();
-    }
-
-    fn queue_datagram_error(&mut self, error: &ECPacketError) {
-        let msg = format!("❌ EtherCAT Datagram Error: {:?}", error);
-        self.error_queue.push_back(msg);
-    }
-
-    fn queue_device_error(&mut self, error: &ECDeviceError) {
-        let msg = match error {
-            ECDeviceError::InvalidAutoIncrementAddress {
-                packet_number,
-                timestamp,
-                command,
-                address,
-            } => {
-                format!(
-                    "⚠️  #{} [{:.3}s] {}: Invalid Auto-Increment Addr {:#06x}",
-                    packet_number,
-                    timestamp.as_secs_f64(),
-                    command.as_str(),
-                    address,
-                )
-            }
-            ECDeviceError::InvalidConfiguredAddress {
-                packet_number,
-                timestamp,
-                command,
-                address,
-            } => {
-                format!(
-                    "⚠️  #{} [{:.3}s] {}: Invalid Configured Addr {:#06x}",
-                    packet_number,
-                    timestamp.as_secs_f64(),
-                    command.as_str(),
-                    address,
-                )
-            }
-            ECDeviceError::InvalidWkc(d) => {
-                let dev_str = d
-                    .subdevice_id
-                    .as_ref()
-                    .map(|s| format!(" [{}]", s))
-                    .unwrap_or_default();
-                format!(
-                    "❌ #{} [{:.3}s] WKC Mismatch: {}{} (exp: {}, got: {})",
-                    d.packet_number,
-                    d.timestamp.as_secs_f64(),
-                    d.command.as_str(),
-                    dev_str,
-                    d.expected,
-                    d.actual
-                )
-            }
-            ECDeviceError::ESMError(d) => {
-                format!(
-                    "💥 #{} [{:.3}s] ESM Error [{}]: {:?}",
-                    d.packet_number,
-                    d.timestamp.as_secs_f64(),
-                    d.subdevice_id,
-                    d.error
-                )
-            }
-        };
-        self.error_queue.push_back(msg);
-    }
-
-    fn flush_queue(&mut self) {
-        while let Some(msg) = self.error_queue.pop_front() {
-            println!("{}", msg);
-        }
-    }
-
-    // fn print_aggregated_error(&self, agg: &ErrorAggregation) {
-    //     match &agg.error {
-    //         ECDeviceError::InvalidWkc(d) => {
-    //             let dev_str = d
-    //                 .subdevice_id
-    //                 .as_ref()
-    //                 .map(|s| format!(" [{}]", s))
-    //                 .unwrap_or_default();
-    //             self.print_colored("📈 Aggregated WKC Error", Color::Red);
-    //             println!(" ({}{})", d.command.as_str(), dev_str);
-
-    //             let rate = agg.count as f64
-    //                 / (agg.last_timestamp.as_secs_f64() - agg.first_timestamp.as_secs_f64())
-    //                     .max(0.001);
-
-    //             println!("   Occurrences: {} (rate: {:.1}/s)", agg.count, rate);
-    //             println!(
-    //                 "   Frame range: #{} → #{}",
-    //                 agg.first_packet_number, agg.last_packet_number
-    //             );
-
-    //             if self.verbose >= VerboseLevel::Detailed {
-    //                 println!("   Expected WKC: {}, Actual WKC: {}", d.expected, d.actual);
-    //                 println!(
-    //                     "   Time span: {:.3}s → {:.3}s",
-    //                     agg.first_timestamp.as_secs_f64(),
-    //                     agg.last_timestamp.as_secs_f64()
-    //                 );
-    //                 println!("   Impact: {}", self.classify_error_impact(agg.count));
-    //             }
-
-    //             if agg.related_wkc_error.is_some() {
-    //                 println!("   🔗 Related to previous WKC error");
-    //             }
-    //         }
-    //         ECDeviceError::ESMError(d) => {
-    //             self.print_colored("💥 Aggregated ESM Errors", Color::Red);
-    //             println!(" [{}]", d.subdevice_id);
-    //             println!("   Error Type: {:?}", d.error);
-    //             println!("   Occurrences: {}", agg.count);
-    //             println!(
-    //                 "   Frame range: #{} → #{}",
-    //                 agg.first_packet_number, agg.last_packet_number
-    //             );
-    //             println!("   ⚠️  Multiple state machine failures detected");
-
-    //             if agg.related_wkc_error.is_some() {
-    //                 println!("   🔗 Likely caused by WKC errors (see correlation analysis)");
-    //             }
-    //         }
-    //         _ => {
-    //             self.print_single_error(&agg.error);
-    //         }
-    //     }
-    // }
-
-    fn print_single_error(&self, error: &ECDeviceError) {
-        match error {
-            ECDeviceError::InvalidAutoIncrementAddress {
-                packet_number,
-                timestamp,
-                command,
-                address,
-            } => {
-                self.print_colored("⚠️  Address Error", Color::Yellow);
-                println!(
-                    ": #{} [{:.3}s] {} Invalid auto-increment {:#06x}",
-                    packet_number,
-                    timestamp.as_secs_f64(),
-                    command.as_str(),
-                    address,
-                );
-            }
-            ECDeviceError::InvalidConfiguredAddress {
-                packet_number,
-                timestamp,
-                command,
-                address,
-            } => {
-                self.print_colored("⚠️  Address Error", Color::Yellow);
-                println!(
-                    ": #{} [{:.3}s] {} Invalid configured {:#06x}",
-                    packet_number,
-                    timestamp.as_secs_f64(),
-                    command.as_str(),
-                    address,
-                );
-            }
-            ECDeviceError::InvalidWkc(d) => {
-                let dev_str = d
-                    .subdevice_id
-                    .as_ref()
-                    .map(|s| format!(" [{}]", s))
-                    .unwrap_or_default();
-                self.print_colored("❌ WKC Error", Color::Red);
-                println!(
-                    ": #{} [{:.3}s] {}{}",
-                    d.packet_number,
-                    d.timestamp.as_secs_f64(),
-                    d.command.as_str(),
-                    dev_str
-                );
-
-                if self.verbose >= VerboseLevel::Normal {
-                    println!("   Expected: {}, Actual: {}", d.expected, d.actual);
-                    println!("   Cause: {}", self.analyze_wkc_cause(d.expected, d.actual));
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| "—".to_string());
+                    let cause = Self::wkc_cause_short(d.expected, d.actual);
+                    let key = format!(
+                        "wkc:{}:{}:{}:{}",
+                        d.command.as_str(),
+                        sub,
+                        d.expected,
+                        d.actual
+                    );
+                    let detail = format!(
+                        "{} [{}] expected:{} actual:{} ({})",
+                        d.command.as_str(),
+                        sub,
+                        d.expected,
+                        d.actual,
+                        cause,
+                    );
+                    let msg = Self::format_tagged_line(
+                        "WKC",
+                        &detail,
+                        Some(d.packet_number),
+                        Some(d.timestamp),
+                        Color::Red,
+                    );
+                    (key, msg, d.packet_number, d.timestamp, None)
                 }
-            }
-            ECDeviceError::ESMError(d) => {
-                self.print_colored("💥 ESM Error", Color::Red);
-                println!(
-                    ": #{} [{:.3}s] {} [{}]",
-                    d.packet_number,
-                    d.timestamp.as_secs_f64(),
-                    d.command.as_str(),
-                    d.subdevice_id
-                );
-
-                if self.verbose >= VerboseLevel::Normal {
-                    println!("   Error: {:?}", d.error);
-                    println!("   Impact: State machine failure - device may be offline");
+                ECDeviceError::ESMError(d) => {
+                    let esm_short = Self::esm_error_short(&d.error);
+                    // Include the correlated WKC error in the dedup key so that
+                    // the same ESM+WKC pair collapses together.
+                    let corr = Self::find_correlation_for_esm(d, correlations);
+                    let key = format!(
+                        "esm:{}:{:?}",
+                        d.subdevice_id,
+                        std::mem::discriminant(&d.error)
+                    );
+                    let detail =
+                        format!("[{}] {} {}", d.subdevice_id, d.command.as_str(), esm_short);
+                    let msg = Self::format_tagged_line(
+                        "ESM",
+                        &detail,
+                        Some(d.packet_number),
+                        Some(d.timestamp),
+                        Color::Magenta,
+                    );
+                    (key, msg, d.packet_number, d.timestamp, corr)
                 }
+            };
+
+        self.emit_event(key, msg, frame, ts);
+
+        // Print sub-lines only for the first occurrence (not during repeats)
+        if self.repeat_count <= 1 {
+            // Show correlated WKC error as a sub-line (same format as WKC error display)
+            if let Some(ref c) = corr {
+                let sub = c
+                    .subdevice_id
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "—".to_string());
+                let cause = Self::wkc_cause_short(c.expected, c.actual);
+                let wkc_detail = format!(
+                    "{} [{}] expected:{} actual:{} ({})",
+                    c.command.as_str(),
+                    sub,
+                    c.expected,
+                    c.actual,
+                    cause,
+                );
+                let wkc_sub_line = Self::format_tagged_line(
+                    "WKC",
+                    &wkc_detail,
+                    Some(c.packet_number),
+                    Some(c.timestamp),
+                    Color::Red,
+                );
+                println!("{} {}", style("         └─").color256(244), wkc_sub_line);
+            }
+
+            // In Detailed mode, also print the diagnosis on a separate line
+            if self.verbose >= VerboseLevel::Detailed {
+                let diagnosis = error.diagnosis();
+                println!(
+                    "{}",
+                    style(format!("         └─ {}", diagnosis)).color256(244)
+                );
             }
         }
     }
 
-    fn classify_error_impact(&self, count: usize) -> &'static str {
-        match count {
-            1..=5 => "Low impact - isolated errors",
-            6..=20 => "Medium impact - recurring issues",
-            21..=50 => "High impact - significant communication problems",
-            _ => "Critical impact - major network failure",
-        }
-    }
+    fn emit_state_transition(&mut self, tr: &StateTransition) {
+        let key = format!("transition:{}:{}:{}", tr.subdevice_id, tr.from, tr.to);
 
-    fn analyze_wkc_cause(&self, expected: u16, actual: u16) -> &'static str {
-        if actual == 0 {
-            "Complete communication failure - no device responses"
-        } else if actual < expected {
-            "Partial communication failure - some devices not responding"
-        } else if actual > expected {
-            "Unexpected responses - possible address conflicts"
+        let arrow = if tr.to > tr.from {
+            style("->").green().to_string()
         } else {
-            "Working counter mismatch"
-        }
+            style("->").red().to_string()
+        };
+
+        let detail = format!("[{}] {} {} {}", tr.subdevice_id, tr.from, arrow, tr.to);
+        let msg = Self::format_tagged_line(
+            "STATE",
+            &detail,
+            Some(tr.packet_number),
+            Some(tr.timestamp),
+            Color::Cyan,
+        );
+        self.emit_event(key, msg, tr.packet_number, tr.timestamp);
     }
 
-    fn print_colored(&self, text: &str, color: Color) {
-        let _ = execute!(stdout(), SetForegroundColor(color), Print(text), ResetColor,);
-    }
-
-    fn print_separator(&self) {
-        println!("{}", "─".repeat(80));
-    }
-
-    fn clear_last_output(&mut self) {
-        if self.last_output_lines > 0 {
-            for _ in 0..self.last_output_lines {
-                let _ = execute!(stdout(), MoveUp(1), Clear(ClearType::CurrentLine));
-            }
-            self.last_output_lines = 0;
-        }
-    }
-
-    pub fn print_summary(&mut self, total_frames: u64, correlations: &[ErrorCorrelation]) {
-        // // verbose level 0のときは何も出力しない
-        // if self.verbose == VerboseLevel::Nothing {
-        //     return;
-        // }
-
-        // // テーブル表示を終了
-        // self.finalize_table();
-
-        // let stats = self.calculate_stats(aggregations);
-        // let total_errors: usize = aggregations.iter().map(|a| a.count).sum();
-
-        // println!();
-        // self.print_separator();
-
-        // if total_errors == 0 {
-        //     self.print_colored("✓ Analysis Complete", Color::Green);
-        //     println!(": No errors detected");
-        //     println!("   Frames analyzed: {}", total_frames);
-        // } else {
-        //     self.print_colored("⚡ Analysis Summary", Color::Cyan);
-        //     println!();
-        //     println!("   Frames analyzed: {}", total_frames);
-        //     println!(
-        //         "   Total errors: {} (rate: {:.2}%)",
-        //         total_errors,
-        //         (total_errors as f64 / total_frames as f64) * 100.0
-        //     );
-
-        //     if self.verbose >= VerboseLevel::Normal {
-        //         println!();
-        //         println!("📊 Error Breakdown:");
-        //         println!("   WKC Errors: {}", stats.wkc_errors);
-        //         println!("   ESM Errors: {}", stats.esm_errors);
-        //         println!("   Address Errors: {}", stats.address_errors);
-        //         if stats.correlated_errors > 0 {
-        //             println!("   Correlated Error Pairs: {}", stats.correlated_errors);
-        //         }
-
-        //         if self.verbose >= VerboseLevel::Detailed {
-        //             self.print_detailed_analysis(&stats, total_frames, correlations);
-        //         }
-        //     }
-        // }
-
-        // self.print_separator();
-    }
-
-    // fn calculate_stats(&self, aggregations: &[ErrorAggregation]) -> ErrorStats {
-    //     let mut stats = ErrorStats {
-    //         wkc_errors: 0,
-    //         esm_errors: 0,
-    //         address_errors: 0,
-    //         correlated_errors: 0,
-    //     };
-
-    //     for agg in aggregations {
-    //         match &agg.error {
-    //             ECDeviceError::InvalidWkc(_) => stats.wkc_errors += agg.count,
-    //             ECDeviceError::ESMError(_) => {
-    //                 stats.esm_errors += agg.count;
-    //                 if agg.related_wkc_error.is_some() {
-    //                     stats.correlated_errors += 1;
-    //                 }
-    //             }
-    //             ECDeviceError::InvalidAutoIncrementAddress { .. }
-    //             | ECDeviceError::InvalidConfiguredAddress { .. } => {
-    //                 stats.address_errors += agg.count
-    //             }
-    //         }
-    //     }
-
-    //     stats
-    // }
-
-    fn print_detailed_analysis(
-        &self,
-        stats: &ErrorStats,
-        total_frames: u64,
+    /// Find a correlation that matches this ESM error (same subdevice, same ESM error).
+    fn find_correlation_for_esm(
+        esm: &crate::analyzer::ESMErrorDetail,
         correlations: &[ErrorCorrelation],
-    ) {
-        println!();
-        println!("🔍 Detailed Analysis:");
+    ) -> Option<WkcErrorDetail> {
+        correlations
+            .iter()
+            .find(|c| {
+                c.esm_error.subdevice_id == esm.subdevice_id
+                    && c.esm_error.packet_number == esm.packet_number
+            })
+            .map(|c| c.wkc_error)
+    }
 
-        if stats.wkc_errors > 0 {
-            println!("   • WKC errors indicate communication issues between master and devices");
-            println!("     Check: cable integrity, device power, network topology");
+    // ─── Core logic ───
+
+    /// Emit a single event. If the same event key was just displayed, overwrite
+    /// the last line with an updated repeat count instead of printing a new line.
+    fn emit_event(&mut self, key: String, base_message: String, frame: u64, ts: Duration) {
+        let sig = EventSignature {
+            key,
+            base_message: base_message.clone(),
+        };
+
+        if let Some(ref last) = self.last_event {
+            if last.key == sig.key {
+                // Same event repeating — increment count and overwrite last line
+                self.repeat_count += 1;
+                self.repeat_last_frame = frame;
+                self.repeat_last_ts = ts;
+                self.overwrite_repeat_line();
+                return;
+            }
         }
 
-        if stats.esm_errors > 0 {
-            println!("   • ESM errors indicate state machine failures in EtherCAT devices");
-            println!("     Check: device configuration, state transitions, error recovery");
+        // Different event — start a new line
+        // (The previous repeat line, if any, is already finalized on stdout)
+        self.last_event = Some(sig);
+        self.repeat_count = 1;
+        self.repeat_first_frame = frame;
+        self.repeat_first_ts = ts;
+        self.repeat_last_frame = frame;
+        self.repeat_last_ts = ts;
+        self.last_printed_lines = 0;
+
+        let lines = self.count_terminal_lines(&base_message);
+        println!("{}", base_message);
+        self.last_printed_lines = lines;
+    }
+
+    /// Calculate how many terminal lines a string occupies when printed,
+    /// accounting for line wrapping at the terminal width boundary.
+    fn count_terminal_lines(&self, text: &str) -> usize {
+        let term_width = self.terminal_width();
+        let visible_width = measure_text_width(text);
+        if visible_width == 0 || term_width == 0 {
+            return 1;
+        }
+        // Ceiling division: how many rows the text spans
+        (visible_width + term_width - 1) / term_width
+    }
+
+    /// Get the current terminal width, with a safe fallback.
+    fn terminal_width(&self) -> usize {
+        let (_rows, cols) = self.term.size();
+        cols as usize
+    }
+
+    /// Overwrite the last line on stdout with a summary showing the repeat count.
+    fn overwrite_repeat_line(&mut self) {
+        let base = match self.last_event {
+            Some(ref e) => e.base_message.clone(),
+            None => return,
+        };
+
+        // Build the repeat summary line
+        let repeat_suffix = format!(
+            " (×{}, #{}-#{}, {:.3}s-{:.3}s)",
+            self.repeat_count,
+            self.repeat_first_frame,
+            self.repeat_last_frame,
+            self.repeat_first_ts.as_secs_f64(),
+            self.repeat_last_ts.as_secs_f64(),
+        );
+
+        let full_line = format!("{}{}", base, style(&repeat_suffix).color256(244));
+
+        // Calculate how many terminal lines the *previous* output occupied
+        let lines_to_clear = if self.repeat_count == 2 {
+            0
+        } else {
+            self.last_printed_lines
+        };
+
+        // Clear the previous output (handles wrapped lines correctly)
+        if lines_to_clear > 0 {
+            let _ = self.term.clear_last_lines(lines_to_clear);
         }
 
-        if !correlations.is_empty() {
-            println!("   • Error correlations suggest WKC failures leading to ESM errors");
-            println!("     Focus: Address the root WKC causes to prevent ESM failures");
+        // Calculate how many lines the new output will occupy
+        let new_lines = self.count_terminal_lines(&full_line);
+
+        println!("{}", full_line);
+        let _ = self.term.flush();
+        self.last_printed_lines = new_lines;
+    }
+
+    /// Flush any pending repeat state. Called before printing non-event output.
+    fn flush_repeat(&mut self) {
+        self.last_event = None;
+        self.repeat_count = 0;
+        self.last_printed_lines = 0;
+    }
+
+    // ─── Formatting helpers ───
+
+    /// Format a tagged error line in the pop style:
+    ///   ▌ TAG  #frame [timestamp] detail
+    fn format_tagged_line(
+        tag: &str,
+        detail: &str,
+        frame: Option<u64>,
+        timestamp: Option<Duration>,
+        tag_color: Color,
+    ) -> String {
+        let tag_style = Style::new().fg(tag_color).bold();
+        let dim_style = Style::new().color256(244); // dark grey
+
+        let mut out = String::new();
+
+        // "  ▌ "
+        out.push_str(&format!("  {} ", tag_style.apply_to("▌")));
+
+        // "TAG     " (left-padded to 8 chars)
+        out.push_str(&format!("{}", tag_style.apply_to(format!("{:<8}", tag))));
+
+        // "#frame  [timestamp] " (dim)
+        if let (Some(f), Some(ts)) = (frame, timestamp) {
+            out.push_str(&format!(
+                "{} ",
+                dim_style.apply_to(format!("#{:<6} [{:>9.6}s]", f, ts.as_secs_f64()))
+            ));
         }
 
-        if stats.address_errors > 0 {
-            println!("   • Address errors suggest network topology or configuration issues");
-            println!("     Check: device addressing, auto-increment configuration");
-        }
+        // detail text (unstyled)
+        out.push_str(detail);
 
-        let error_rate = (stats.wkc_errors + stats.esm_errors) as f64 / total_frames as f64 * 100.0;
-        if error_rate > 1.0 {
-            println!(
-                "   ⚠️  High error rate ({:.2}%) - immediate attention required",
-                error_rate
-            );
-        } else if error_rate > 0.1 {
-            println!(
-                "   ⚠️  Moderate error rate ({:.2}%) - investigation recommended",
-                error_rate
-            );
+        out
+    }
+
+    // ─── Visual helpers ───
+
+    /// Format an interface info line in the same tagged-line style as errors.
+    pub fn format_interface_line(
+        name: &str,
+        description: &str,
+        oper_state: &str,
+        is_default: bool,
+    ) -> String {
+        let suffix = if is_default { ", default" } else { "" };
+        let detail = format!("{} [{}{}]", description, oper_state, suffix);
+        // Build a tagged line with "IF" as placeholder, then replace with the name
+        Self::format_tagged_line("IF", &detail, None, None, Color::Green)
+            .replace("IF      ", &format!("{:<8}", name))
+    }
+
+    fn print_heavy_separator(&self) {
+        println!("{}", style(format!("  {}", "━".repeat(76))).color256(244));
+    }
+
+    // ─── Data helpers ───
+
+    fn wkc_cause_short(expected: u16, actual: u16) -> &'static str {
+        if actual == 0 {
+            "no response"
+        } else if actual < expected {
+            "partial"
+        } else {
+            "over-count"
+        }
+    }
+
+    fn esm_error_short(error: &ecdump::subdevice::ESMError) -> String {
+        use ecdump::subdevice::ESMError;
+        match error {
+            ESMError::IllegalTransition { to } => {
+                format!("illegal -> {}", to)
+            }
+            ESMError::InvalidStateTransition { requested, current } => {
+                format!("{} -> {} invalid", current, requested)
+            }
+            ESMError::BackwardTransition {
+                from,
+                to,
+                has_error,
+            } => {
+                let flag = if *has_error { " +err" } else { "" };
+                format!("{} -> {} backward{}", from, to, flag)
+            }
+            ESMError::TransitionFailed {
+                requested,
+                current,
+                has_error,
+            } => {
+                let flag = if *has_error { " +err" } else { "" };
+                format!(" -> {} failed @{}{}", requested, current, flag)
+            }
         }
     }
 }
 
 impl Drop for ErrorFormatter {
     fn drop(&mut self) {
-        self.finalize_table();
-        self.flush_queue();
+        self.flush_repeat();
     }
 }
 
@@ -627,11 +510,109 @@ mod tests {
     }
 
     #[test]
-    fn test_error_stats_calculation() {
-        // let formatter = ErrorFormatter::new(1);
-        // let aggregations = vec![];
-        // let stats = formatter.calculate_stats(&aggregations);
-        // assert_eq!(stats.wkc_errors, 0);
-        // assert_eq!(stats.esm_errors, 0);
+    fn test_wkc_cause_short() {
+        assert_eq!(ErrorFormatter::wkc_cause_short(3, 0), "no response");
+        assert_eq!(ErrorFormatter::wkc_cause_short(3, 2), "partial");
+        assert_eq!(ErrorFormatter::wkc_cause_short(1, 3), "over-count");
+    }
+
+    #[test]
+    fn test_esm_error_short() {
+        use ecdump::subdevice::{ECState, ESMError};
+
+        let err = ESMError::BackwardTransition {
+            from: ECState::Op,
+            to: ECState::SafeOp,
+            has_error: true,
+        };
+        let s = ErrorFormatter::esm_error_short(&err);
+        assert!(s.contains("backward"), "got: {}", s);
+        assert!(s.contains("+err"), "got: {}", s);
+
+        let err2 = ESMError::TransitionFailed {
+            requested: ECState::Op,
+            current: ECState::SafeOp,
+            has_error: false,
+        };
+        let s2 = ErrorFormatter::esm_error_short(&err2);
+        assert!(s2.contains("failed"), "got: {}", s2);
+        assert!(!s2.contains("+err"), "got: {}", s2);
+    }
+
+    #[test]
+    fn test_format_tagged_line_with_frame() {
+        let line = ErrorFormatter::format_tagged_line(
+            "WKC",
+            "some detail",
+            Some(42),
+            Some(Duration::from_secs_f64(1.234)),
+            Color::Red,
+        );
+        assert!(line.contains("WKC"), "got: {}", line);
+        assert!(line.contains("some detail"), "got: {}", line);
+        assert!(line.contains("42"), "got: {}", line);
+    }
+
+    #[test]
+    fn test_format_tagged_line_without_frame() {
+        let line =
+            ErrorFormatter::format_tagged_line("DATAGRAM", "bad packet", None, None, Color::Red);
+        assert!(line.contains("DATAGRAM"), "got: {}", line);
+        assert!(line.contains("bad packet"), "got: {}", line);
+    }
+
+    #[test]
+    fn test_find_correlation_for_esm() {
+        use crate::analyzer::{ESMErrorDetail, WkcErrorDetail};
+        use ecdump::ec_packet::ECCommands;
+        use ecdump::subdevice::{ECState, ESMError, SubdeviceIdentifier};
+
+        let wkc = WkcErrorDetail {
+            packet_number: 10,
+            command: ECCommands::FPWR,
+            from_main: true,
+            timestamp: Duration::from_secs(1),
+            expected: 1,
+            actual: 0,
+            subdevice_id: Some(SubdeviceIdentifier::Address(0x1001)),
+        };
+
+        let esm = ESMErrorDetail {
+            packet_number: 12,
+            timestamp: Duration::from_secs(2),
+            command: ECCommands::FPRD,
+            subdevice_id: SubdeviceIdentifier::Address(0x1001),
+            error: ESMError::BackwardTransition {
+                from: ECState::Op,
+                to: ECState::SafeOp,
+                has_error: true,
+            },
+        };
+
+        let corr = ErrorCorrelation {
+            wkc_error: wkc,
+            esm_error: esm,
+            frame_gap: 2,
+        };
+
+        // Should find the correlation when packet_number matches
+        let found = ErrorFormatter::find_correlation_for_esm(&esm, &[corr.clone()]);
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().packet_number, 10);
+
+        // Should not find if packet_number differs
+        let mut esm2 = esm;
+        esm2.packet_number = 99;
+        let not_found = ErrorFormatter::find_correlation_for_esm(&esm2, &[corr]);
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_count_terminal_lines() {
+        let formatter = ErrorFormatter::new(1);
+        // A short string should be 1 line
+        assert_eq!(formatter.count_terminal_lines("hello"), 1);
+        // Empty string should be 1 line
+        assert_eq!(formatter.count_terminal_lines(""), 1);
     }
 }

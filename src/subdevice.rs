@@ -17,6 +17,18 @@ pub enum ECState {
     Bootstrap = 0x03,
 }
 
+impl fmt::Display for ECState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ECState::Init => write!(f, "Init"),
+            ECState::PreOp => write!(f, "PreOp"),
+            ECState::SafeOp => write!(f, "SafeOp"),
+            ECState::Op => write!(f, "Op"),
+            ECState::Bootstrap => write!(f, "Bootstrap"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ESMError {
     IllegalTransition {
@@ -85,6 +97,10 @@ impl SubDevice {
 
     pub fn configured_address(&self) -> Option<u16> {
         self.configured_address
+    }
+
+    pub fn state(&self) -> ECState {
+        self.state
     }
 
     pub fn identifier(&self) -> SubdeviceIdentifier {

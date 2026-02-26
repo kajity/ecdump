@@ -340,7 +340,7 @@ pub fn start_read_pcap(
                             .ok();
                     }
 
-                    std::thread::sleep(Duration::from_micros(100));
+                    // std::thread::sleep(Duration::from_micros(100));
                     let from_main = if initial_frame {
                         src_mac = ethernet.get_source();
                         initial_frame = false;
