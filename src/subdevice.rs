@@ -17,7 +17,7 @@ pub enum ECState {
     Bootstrap = 0x03,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum ESMError {
     IllegalTransition {
         to: ECState,

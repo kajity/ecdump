@@ -7,7 +7,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{Write, stdout};
 use std::time::Duration;
 
-use crate::analyzer::{ECDeviceError, ECError, ErrorAggregation, ErrorCorrelation};
+use crate::analyzer::{ECDeviceError, ECError, ErrorCorrelation};
 use ecdump::ec_packet::ECPacketError;
 use ecdump::subdevice::SubdeviceIdentifier;
 use log::info;
@@ -140,11 +140,14 @@ impl ErrorFormatter {
 
         // table header
         let header =
-            "┌────────────────────────────--────────────────────────────────────────────────┐
+            "┌──────────────────────────────────────────────────────────────────────────────┐
 │ 📊 ESM Error Summary (Live)                                                  │
-├──────────────────┬────────────────────┬───────┬─-──────────┬─────────────────┤
+├──────────────────┬────────────────────┬───────┬────────────┬─────────────────┤
 │ Subdevice        │ Error Type         │ Count │ Last Frame │ Last Time (s)   │
-├──────────────────┼────────────────────┼───────┼───────────-┼─────────────────┤
+├──────────────────┼────────────────────┼───────┼────────────┼─────────────────┤
+";
+        let footer =
+            "└──────────────────┴────────────────────┴───────┴────────────┴─────────────────┘
 ";
         stdout.queue(Print(header)).ok();
         let mut header_lines = 5;
@@ -180,9 +183,7 @@ impl ErrorFormatter {
             header_lines += 1;
         }
 
-        println!(
-            "└──────────────────┴────────────────────┴───────┴──-─────────┴─────────────────┘"
-        );
+        stdout.queue(Print(footer)).ok();
         header_lines += 1;
 
         self.last_output_lines = header_lines;
@@ -198,22 +199,22 @@ impl ErrorFormatter {
         }
     }
 
-    pub fn report_aggregations(&mut self, aggregations: &[ErrorAggregation]) {
-        if self.verbose == VerboseLevel::Nothing {
-            return;
-        }
+    // pub fn report_aggregations(&mut self, aggregations: &[ErrorAggregation]) {
+    //     if self.verbose == VerboseLevel::Nothing {
+    //         return;
+    //     }
 
-        // テーブル表示を終了
-        self.finalize_table();
+    //     // テーブル表示を終了
+    //     self.finalize_table();
 
-        for agg in aggregations {
-            if agg.count > 1 {
-                self.print_aggregated_error(agg);
-            } else {
-                self.print_single_error(&agg.error);
-            }
-        }
-    }
+    //     for agg in aggregations {
+    //         if agg.count > 1 {
+    //             self.print_aggregated_error(agg);
+    //         } else {
+    //             self.print_single_error(&agg.error);
+    //         }
+    //     }
+    // }
 
     pub fn report_correlations(&mut self, correlations: &[ErrorCorrelation]) {
         info!("Reporting {} error correlations", correlations.len());
@@ -227,35 +228,30 @@ impl ErrorFormatter {
         println!();
 
         for (i, corr) in correlations.iter().enumerate() {
-            if let Some(esm_err) = &corr.esm_error {
+            println!(
+                "  {}. ESM Error correlated with WKC Error (gap: {} frames)",
+                i + 1,
+                corr.frame_gap
+            );
+
+            if self.verbose >= VerboseLevel::Detailed {
+                println!("     Analysis: ESM error likely resulted from preceding WKC mismatch");
+                let detail = &corr.wkc_error;
                 println!(
-                    "  {}. ESM Error correlated with WKC Error (gap: {} frames)",
-                    i + 1,
-                    corr.frame_gap
+                    "     WKC: {}[{}] (expected: {}, actual: {})",
+                    detail.command.as_str(),
+                    detail
+                        .subdevice_id
+                        .unwrap_or(SubdeviceIdentifier::Unknown)
+                        .to_string(),
+                    detail.expected,
+                    detail.actual
                 );
 
-                if self.verbose >= VerboseLevel::Detailed {
-                    println!(
-                        "     Analysis: ESM error likely resulted from preceding WKC mismatch"
-                    );
-                    if let ECDeviceError::InvalidWkc(detail) = &corr.wkc_error {
-                        let dev_str = detail
-                            .subdevice_id
-                            .as_ref()
-                            .map(|s| format!(" [{}]", s))
-                            .unwrap_or_default();
-                        println!(
-                            "     WKC: {}{} (expected: {}, actual: {})",
-                            detail.command.as_str(),
-                            dev_str,
-                            detail.expected,
-                            detail.actual
-                        );
-                    }
-                    println!("     ESM: {:?}", esm_err);
-                }
+                println!("     ESM: {:?}", corr.esm_error.error);
             }
         }
+
         println!();
     }
 
@@ -329,61 +325,61 @@ impl ErrorFormatter {
         }
     }
 
-    fn print_aggregated_error(&self, agg: &ErrorAggregation) {
-        match &agg.error {
-            ECDeviceError::InvalidWkc(d) => {
-                let dev_str = d
-                    .subdevice_id
-                    .as_ref()
-                    .map(|s| format!(" [{}]", s))
-                    .unwrap_or_default();
-                self.print_colored("📈 Aggregated WKC Error", Color::Red);
-                println!(" ({}{})", d.command.as_str(), dev_str);
+    // fn print_aggregated_error(&self, agg: &ErrorAggregation) {
+    //     match &agg.error {
+    //         ECDeviceError::InvalidWkc(d) => {
+    //             let dev_str = d
+    //                 .subdevice_id
+    //                 .as_ref()
+    //                 .map(|s| format!(" [{}]", s))
+    //                 .unwrap_or_default();
+    //             self.print_colored("📈 Aggregated WKC Error", Color::Red);
+    //             println!(" ({}{})", d.command.as_str(), dev_str);
 
-                let rate = agg.count as f64
-                    / (agg.last_timestamp.as_secs_f64() - agg.first_timestamp.as_secs_f64())
-                        .max(0.001);
+    //             let rate = agg.count as f64
+    //                 / (agg.last_timestamp.as_secs_f64() - agg.first_timestamp.as_secs_f64())
+    //                     .max(0.001);
 
-                println!("   Occurrences: {} (rate: {:.1}/s)", agg.count, rate);
-                println!(
-                    "   Frame range: #{} → #{}",
-                    agg.first_packet_number, agg.last_packet_number
-                );
+    //             println!("   Occurrences: {} (rate: {:.1}/s)", agg.count, rate);
+    //             println!(
+    //                 "   Frame range: #{} → #{}",
+    //                 agg.first_packet_number, agg.last_packet_number
+    //             );
 
-                if self.verbose >= VerboseLevel::Detailed {
-                    println!("   Expected WKC: {}, Actual WKC: {}", d.expected, d.actual);
-                    println!(
-                        "   Time span: {:.3}s → {:.3}s",
-                        agg.first_timestamp.as_secs_f64(),
-                        agg.last_timestamp.as_secs_f64()
-                    );
-                    println!("   Impact: {}", self.classify_error_impact(agg.count));
-                }
+    //             if self.verbose >= VerboseLevel::Detailed {
+    //                 println!("   Expected WKC: {}, Actual WKC: {}", d.expected, d.actual);
+    //                 println!(
+    //                     "   Time span: {:.3}s → {:.3}s",
+    //                     agg.first_timestamp.as_secs_f64(),
+    //                     agg.last_timestamp.as_secs_f64()
+    //                 );
+    //                 println!("   Impact: {}", self.classify_error_impact(agg.count));
+    //             }
 
-                if agg.related_wkc_error.is_some() {
-                    println!("   🔗 Related to previous WKC error");
-                }
-            }
-            ECDeviceError::ESMError(d) => {
-                self.print_colored("💥 Aggregated ESM Errors", Color::Red);
-                println!(" [{}]", d.subdevice_id);
-                println!("   Error Type: {:?}", d.error);
-                println!("   Occurrences: {}", agg.count);
-                println!(
-                    "   Frame range: #{} → #{}",
-                    agg.first_packet_number, agg.last_packet_number
-                );
-                println!("   ⚠️  Multiple state machine failures detected");
+    //             if agg.related_wkc_error.is_some() {
+    //                 println!("   🔗 Related to previous WKC error");
+    //             }
+    //         }
+    //         ECDeviceError::ESMError(d) => {
+    //             self.print_colored("💥 Aggregated ESM Errors", Color::Red);
+    //             println!(" [{}]", d.subdevice_id);
+    //             println!("   Error Type: {:?}", d.error);
+    //             println!("   Occurrences: {}", agg.count);
+    //             println!(
+    //                 "   Frame range: #{} → #{}",
+    //                 agg.first_packet_number, agg.last_packet_number
+    //             );
+    //             println!("   ⚠️  Multiple state machine failures detected");
 
-                if agg.related_wkc_error.is_some() {
-                    println!("   🔗 Likely caused by WKC errors (see correlation analysis)");
-                }
-            }
-            _ => {
-                self.print_single_error(&agg.error);
-            }
-        }
-    }
+    //             if agg.related_wkc_error.is_some() {
+    //                 println!("   🔗 Likely caused by WKC errors (see correlation analysis)");
+    //             }
+    //         }
+    //         _ => {
+    //             self.print_single_error(&agg.error);
+    //         }
+    //     }
+    // }
 
     fn print_single_error(&self, error: &ECDeviceError) {
         match error {
@@ -493,85 +489,80 @@ impl ErrorFormatter {
         }
     }
 
-    pub fn print_summary(
-        &mut self,
-        total_frames: u64,
-        aggregations: &[ErrorAggregation],
-        correlations: &[ErrorCorrelation],
-    ) {
-        // verbose level 0のときは何も出力しない
-        if self.verbose == VerboseLevel::Nothing {
-            return;
-        }
+    pub fn print_summary(&mut self, total_frames: u64, correlations: &[ErrorCorrelation]) {
+        // // verbose level 0のときは何も出力しない
+        // if self.verbose == VerboseLevel::Nothing {
+        //     return;
+        // }
 
-        // テーブル表示を終了
-        self.finalize_table();
+        // // テーブル表示を終了
+        // self.finalize_table();
 
-        let stats = self.calculate_stats(aggregations);
-        let total_errors: usize = aggregations.iter().map(|a| a.count).sum();
+        // let stats = self.calculate_stats(aggregations);
+        // let total_errors: usize = aggregations.iter().map(|a| a.count).sum();
 
-        println!();
-        self.print_separator();
+        // println!();
+        // self.print_separator();
 
-        if total_errors == 0 {
-            self.print_colored("✓ Analysis Complete", Color::Green);
-            println!(": No errors detected");
-            println!("   Frames analyzed: {}", total_frames);
-        } else {
-            self.print_colored("⚡ Analysis Summary", Color::Cyan);
-            println!();
-            println!("   Frames analyzed: {}", total_frames);
-            println!(
-                "   Total errors: {} (rate: {:.2}%)",
-                total_errors,
-                (total_errors as f64 / total_frames as f64) * 100.0
-            );
+        // if total_errors == 0 {
+        //     self.print_colored("✓ Analysis Complete", Color::Green);
+        //     println!(": No errors detected");
+        //     println!("   Frames analyzed: {}", total_frames);
+        // } else {
+        //     self.print_colored("⚡ Analysis Summary", Color::Cyan);
+        //     println!();
+        //     println!("   Frames analyzed: {}", total_frames);
+        //     println!(
+        //         "   Total errors: {} (rate: {:.2}%)",
+        //         total_errors,
+        //         (total_errors as f64 / total_frames as f64) * 100.0
+        //     );
 
-            if self.verbose >= VerboseLevel::Normal {
-                println!();
-                println!("📊 Error Breakdown:");
-                println!("   WKC Errors: {}", stats.wkc_errors);
-                println!("   ESM Errors: {}", stats.esm_errors);
-                println!("   Address Errors: {}", stats.address_errors);
-                if stats.correlated_errors > 0 {
-                    println!("   Correlated Error Pairs: {}", stats.correlated_errors);
-                }
+        //     if self.verbose >= VerboseLevel::Normal {
+        //         println!();
+        //         println!("📊 Error Breakdown:");
+        //         println!("   WKC Errors: {}", stats.wkc_errors);
+        //         println!("   ESM Errors: {}", stats.esm_errors);
+        //         println!("   Address Errors: {}", stats.address_errors);
+        //         if stats.correlated_errors > 0 {
+        //             println!("   Correlated Error Pairs: {}", stats.correlated_errors);
+        //         }
 
-                if self.verbose >= VerboseLevel::Detailed {
-                    self.print_detailed_analysis(&stats, total_frames, correlations);
-                }
-            }
-        }
+        //         if self.verbose >= VerboseLevel::Detailed {
+        //             self.print_detailed_analysis(&stats, total_frames, correlations);
+        //         }
+        //     }
+        // }
 
-        self.print_separator();
+        // self.print_separator();
     }
 
-    fn calculate_stats(&self, aggregations: &[ErrorAggregation]) -> ErrorStats {
-        let mut stats = ErrorStats {
-            wkc_errors: 0,
-            esm_errors: 0,
-            address_errors: 0,
-            correlated_errors: 0,
-        };
+    // fn calculate_stats(&self, aggregations: &[ErrorAggregation]) -> ErrorStats {
+    //     let mut stats = ErrorStats {
+    //         wkc_errors: 0,
+    //         esm_errors: 0,
+    //         address_errors: 0,
+    //         correlated_errors: 0,
+    //     };
 
-        for agg in aggregations {
-            match &agg.error {
-                ECDeviceError::InvalidWkc(_) => stats.wkc_errors += agg.count,
-                ECDeviceError::ESMError(_) => {
-                    stats.esm_errors += agg.count;
-                    if agg.related_wkc_error.is_some() {
-                        stats.correlated_errors += 1;
-                    }
-                }
-                ECDeviceError::InvalidAutoIncrementAddress { .. }
-                | ECDeviceError::InvalidConfiguredAddress { .. } => {
-                    stats.address_errors += agg.count
-                }
-            }
-        }
+    //     for agg in aggregations {
+    //         match &agg.error {
+    //             ECDeviceError::InvalidWkc(_) => stats.wkc_errors += agg.count,
+    //             ECDeviceError::ESMError(_) => {
+    //                 stats.esm_errors += agg.count;
+    //                 if agg.related_wkc_error.is_some() {
+    //                     stats.correlated_errors += 1;
+    //                 }
+    //             }
+    //             ECDeviceError::InvalidAutoIncrementAddress { .. }
+    //             | ECDeviceError::InvalidConfiguredAddress { .. } => {
+    //                 stats.address_errors += agg.count
+    //             }
+    //         }
+    //     }
 
-        stats
-    }
+    //     stats
+    // }
 
     fn print_detailed_analysis(
         &self,
@@ -637,10 +628,10 @@ mod tests {
 
     #[test]
     fn test_error_stats_calculation() {
-        let formatter = ErrorFormatter::new(1);
-        let aggregations = vec![];
-        let stats = formatter.calculate_stats(&aggregations);
-        assert_eq!(stats.wkc_errors, 0);
-        assert_eq!(stats.esm_errors, 0);
+        // let formatter = ErrorFormatter::new(1);
+        // let aggregations = vec![];
+        // let stats = formatter.calculate_stats(&aggregations);
+        // assert_eq!(stats.wkc_errors, 0);
+        // assert_eq!(stats.esm_errors, 0);
     }
 }

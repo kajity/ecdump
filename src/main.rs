@@ -144,13 +144,12 @@ fn main() -> Result<()> {
         }
     }
 
-    error_formatter.report_aggregations(device_manager.get_error_aggregations());
+    // error_formatter.report_aggregations(device_manager.get_error_aggregations());
 
     error_formatter.report_correlations(device_manager.get_error_correlations());
 
     error_formatter.print_summary(
         device_manager.get_frame_count(),
-        device_manager.get_error_aggregations(),
         device_manager.get_error_correlations(),
     );
 

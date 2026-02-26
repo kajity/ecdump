@@ -148,6 +148,8 @@ pub fn set_up_logging(verbose: u8) {
         } else if verbose == 1 {
             log::LevelFilter::Warn
         } else if verbose == 2 {
+            log::LevelFilter::Info
+        } else if verbose == 3 {
             log::LevelFilter::Debug
         } else {
             log::LevelFilter::Trace

@@ -8,7 +8,7 @@ use crate::ec_packet::ECFrame;
 use ecdump::ec_packet::{ECCommand, ECCommands, ECDatagram, ECPacketError};
 use ecdump::subdevice::{self, ESMError, SubDevice, SubdeviceIdentifier};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct WkcErrorDetail {
     pub packet_number: u64,
     pub command: ECCommand,
@@ -19,7 +19,7 @@ pub struct WkcErrorDetail {
     pub subdevice_id: Option<SubdeviceIdentifier>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct ESMErrorDetail {
     pub packet_number: u64,
     pub timestamp: Duration,
@@ -53,20 +53,9 @@ pub enum ECError {
 }
 
 #[derive(Debug, Clone)]
-pub struct ErrorAggregation {
-    pub error: ECDeviceError,
-    pub count: usize,
-    pub first_packet_number: u64,
-    pub last_packet_number: u64,
-    pub related_wkc_error: Option<Box<ECDeviceError>>,
-    pub first_timestamp: Duration,
-    pub last_timestamp: Duration,
-}
-
-#[derive(Debug, Clone)]
 pub struct ErrorCorrelation {
-    pub wkc_error: ECDeviceError,
-    pub esm_error: Option<ESMError>,
+    pub wkc_error: WkcErrorDetail,
+    pub esm_error: ESMErrorDetail,
     pub frame_gap: u64,
 }
 
@@ -76,11 +65,9 @@ pub struct DeviceManager {
     expected_wkc: u16,
     devices: Vec<SubDevice>,
     config_address_map: HashMap<u16, usize>,
-    error_aggregations: Vec<ErrorAggregation>,
-    wkc_error_history: VecDeque<(u64, ECDeviceError)>,
+    wkc_error_history: VecDeque<WkcErrorDetail>,
     correlations: Vec<ErrorCorrelation>,
     consecutive_same_errors: usize,
-    last_error_type: Option<String>,
 }
 
 impl DeviceManager {
@@ -91,11 +78,9 @@ impl DeviceManager {
             expected_wkc: 0,
             devices: Vec::new(),
             config_address_map: HashMap::new(),
-            error_aggregations: Vec::new(),
             wkc_error_history: VecDeque::new(),
             correlations: Vec::new(),
             consecutive_same_errors: 0,
-            last_error_type: None,
         }
     }
 
@@ -190,57 +175,22 @@ impl DeviceManager {
                     });
                 }
                 Err(ECDeviceError::InvalidWkc(wkc_err)) => {
-                    let dev_str = wkc_err
-                        .subdevice_id
-                        .as_ref()
-                        .map(|s| format!(" [{}]", s))
-                        .unwrap_or_default();
-                    if wkc_err.from_main {
-                        debug!(
-                            "#{} WKC error (main->device): {}{}, adp {:04x}, ado {:#06x}, expected {}, got {}",
-                            wkc_err.packet_number,
-                            wkc_err.command.as_str(),
-                            dev_str,
-                            datagram.address().0,
-                            datagram.address().1,
-                            wkc_err.expected,
-                            wkc_err.actual,
-                        );
-                    } else {
-                        warn!(
-                            "#{} WKC error: {}{}, adp {:04x}, ado {:#06x}, expected {}, got {}",
-                            wkc_err.packet_number,
-                            wkc_err.command.as_str(),
-                            dev_str,
-                            datagram.address().0,
-                            datagram.address().1,
-                            wkc_err.expected,
-                            wkc_err.actual,
-                        );
-                    }
+                    warn!(
+                        "#{} WKC error: {} [{}], adp {:04x}, ado {:#06x}, expected {}, got {}",
+                        wkc_err.packet_number,
+                        wkc_err.command.as_str(),
+                        wkc_err
+                            .subdevice_id
+                            .unwrap_or(SubdeviceIdentifier::Unknown)
+                            .to_string(),
+                        datagram.address().0,
+                        datagram.address().1,
+                        wkc_err.expected,
+                        wkc_err.actual,
+                    );
 
-                    let err = ECDeviceError::InvalidWkc(WkcErrorDetail {
-                        packet_number: wkc_err.packet_number,
-                        command: wkc_err.command,
-                        from_main: wkc_err.from_main,
-                        timestamp: wkc_err.timestamp,
-                        expected: wkc_err.expected,
-                        actual: wkc_err.actual,
-                        subdevice_id: wkc_err.subdevice_id,
-                    });
-                    self.aggregate_error(&err, timestamp);
-                    // ESM ErrorがWKC Errorに関連している可能性をチェック
-                    if let ECDeviceError::ESMError(_) = &err {
-                        // self.correlate_esm_with_wkc(&err);
-                    }
-
-                    if let ECDeviceError::InvalidWkc(_) = &err {
-                        if self.wkc_error_history.len() >= 50 {
-                            self.wkc_error_history.pop_front();
-                        }
-                        self.wkc_error_history
-                            .push_back((self.num_frames, err.clone()));
-                    }
+                    let err = ECDeviceError::InvalidWkc(wkc_err);
+                    self.wkc_error_history.push_back(wkc_err);
                     errors.push(err);
                 }
                 Err(ECDeviceError::ESMError(esm_error)) => {
@@ -249,6 +199,7 @@ impl DeviceManager {
                         esm_error.packet_number, esm_error.subdevice_id, esm_error.error
                     );
                     errors.push(ECDeviceError::ESMError(esm_error));
+                    self.correlate_esm_with_wkc(&esm_error);
                 }
                 _ => {}
             }
@@ -262,76 +213,25 @@ impl DeviceManager {
     }
 
     // TODO: ESMエラーとWKCエラーの関連性を分析するためのロジック
-    fn correlate_esm_with_wkc(&mut self, esm_error: &ESMError) {
-        for (frame_num, wkc_err) in self.wkc_error_history.iter().rev() {
-            if self.num_frames - frame_num <= 10 {
+    fn correlate_esm_with_wkc(&mut self, esm_error: &ESMErrorDetail) {
+        for wkc_err in self.wkc_error_history.iter().rev() {
+            if let Some(wkc_err_subdevice) = wkc_err.subdevice_id
+                && wkc_err_subdevice == esm_error.subdevice_id
+            {
                 let correlation = ErrorCorrelation {
-                    wkc_error: wkc_err.clone(),
-                    esm_error: Some(esm_error.clone()),
-                    frame_gap: self.num_frames - frame_num,
+                    wkc_error: *wkc_err,
+                    esm_error: *esm_error,
+                    frame_gap: self.num_frames - wkc_err.packet_number,
                 };
                 self.correlations.push(correlation);
                 debug!(
                     "Correlated ESM Error with WKC Error from frame #{} (gap: {} frames)",
-                    frame_num,
-                    self.num_frames - frame_num
+                    wkc_err.packet_number,
+                    self.num_frames - wkc_err.packet_number
                 );
                 break;
             }
         }
-    }
-
-    fn aggregate_error(&mut self, error: &ECDeviceError, timestamp: Duration) {
-        if let Some(last_agg) = self.error_aggregations.last_mut() {
-            if Self::errors_are_same(&last_agg.error, error) {
-                last_agg.count += 1;
-                last_agg.last_packet_number = self.num_frames;
-                last_agg.last_timestamp = timestamp;
-                self.consecutive_same_errors += 1;
-
-                if self.consecutive_same_errors > 5 {
-                    debug!(
-                        "Burst of {} consecutive similar errors detected",
-                        self.consecutive_same_errors
-                    );
-                }
-                return;
-            }
-        }
-
-        let error_type = match error {
-            ECDeviceError::InvalidWkc(WkcErrorDetail { command, .. }) => {
-                format!("WKC_{}", command.as_str())
-            }
-            ECDeviceError::ESMError(_) => "ESM".to_string(),
-            ECDeviceError::InvalidAutoIncrementAddress { .. } => "AUTOINC_ADDR".to_string(),
-            ECDeviceError::InvalidConfiguredAddress { .. } => "CONFIG_ADDR".to_string(),
-        };
-
-        if self.last_error_type.as_ref() != Some(&error_type) {
-            self.consecutive_same_errors = 1;
-            self.last_error_type = Some(error_type);
-        }
-
-        let mut aggregation = ErrorAggregation {
-            error: error.clone(),
-            count: 1,
-            first_packet_number: self.num_frames,
-            last_packet_number: self.num_frames,
-            related_wkc_error: None,
-            first_timestamp: timestamp,
-            last_timestamp: timestamp,
-        };
-
-        if let ECDeviceError::ESMError(_) = error {
-            if let Some((_, wkc_err)) = self.wkc_error_history.back() {
-                if self.num_frames - self.wkc_error_history.back().unwrap().0 <= 10 {
-                    aggregation.related_wkc_error = Some(Box::new(wkc_err.clone()));
-                }
-            }
-        }
-
-        self.error_aggregations.push(aggregation);
     }
 
     fn errors_are_same(err1: &ECDeviceError, err2: &ECDeviceError) -> bool {
@@ -378,10 +278,6 @@ impl DeviceManager {
 
     pub fn get_frame_count(&self) -> u64 {
         self.num_frames
-    }
-
-    pub fn get_error_aggregations(&self) -> &[ErrorAggregation] {
-        &self.error_aggregations
     }
 
     pub fn get_error_correlations(&self) -> &[ErrorCorrelation] {
