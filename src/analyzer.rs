@@ -12,7 +12,6 @@ use ecdump::subdevice::{self, ECState, ESMError, SubDevice, SubdeviceIdentifier}
 pub struct WkcErrorDetail {
     pub packet_number: u64,
     pub command: ECCommand,
-    pub from_main: bool,
     pub timestamp: Duration,
     pub expected: u16,
     pub actual: u16,
@@ -206,7 +205,11 @@ pub struct StateTransition {
 
 #[derive(Debug)]
 pub enum ECError {
-    InvalidDatagram(ECPacketError),
+    InvalidDatagram {
+        packet_number: u64,
+        timestamp: Duration,
+        error: ECPacketError,
+    },
     DeviceError(Vec<ECDeviceError>),
 }
 
@@ -251,11 +254,22 @@ impl DeviceManager {
         timestamp: Duration,
         from_main: bool,
     ) -> Result<(), ECError> {
-        if packet.protocol_type() != 0x01 {
-            return Err(ECError::InvalidDatagram(ECPacketError::InvalidHeader));
-        }
-        let datagrams = packet.parse_datagram().map_err(ECError::InvalidDatagram)?;
         self.num_frames += 1;
+
+        if packet.protocol_type() != 0x01 {
+            return Err(ECError::InvalidDatagram {
+                packet_number: self.num_frames,
+                timestamp,
+                error: ECPacketError::InvalidHeader,
+            });
+        }
+        let datagrams = packet
+            .parse_datagram()
+            .map_err(|e| ECError::InvalidDatagram {
+                packet_number: self.num_frames,
+                timestamp,
+                error: e,
+            })?;
 
         for d in datagrams.iter() {
             trace!(
@@ -486,7 +500,6 @@ trait Command {
             return Err(ECDeviceError::InvalidWkc(WkcErrorDetail {
                 packet_number: manager.num_frames,
                 command: datagram.command(),
-                from_main: self.from_main(),
                 timestamp: self.timestamp(),
                 subdevice_id: self.get_subdevice_id(manager, datagram),
                 expected: manager.expected_wkc,
@@ -660,7 +673,7 @@ impl Command for ApwrCommand {
         let auto_increment_addr = datagram.address().0;
         let subdevice_index = self
             .get_idx_from_auto_increment_address(manager, auto_increment_addr)
-            .ok_or(ECDeviceError::InvalidAutoIncrementAddress {
+            .ok_or_else(|| ECDeviceError::InvalidAutoIncrementAddress {
                 packet_number: manager.num_frames,
                 timestamp: self.timestamp,
                 command: datagram.command(),
@@ -755,7 +768,7 @@ impl Command for AprdCommand {
         let auto_increment_addr = datagram.address().0;
         let subdevice_index = self
             .get_index_from_auto_increment_address(manager, auto_increment_addr)
-            .ok_or(ECDeviceError::InvalidAutoIncrementAddress {
+            .ok_or_else(|| ECDeviceError::InvalidAutoIncrementAddress {
                 packet_number: manager.num_frames,
                 timestamp: self.timestamp,
                 command: datagram.command(),

@@ -77,8 +77,12 @@ impl ErrorFormatter {
         }
 
         match error {
-            ECError::InvalidDatagram(e) => {
-                self.emit_datagram_error(&e);
+            ECError::InvalidDatagram {
+                packet_number,
+                timestamp,
+                error: e,
+            } => {
+                self.emit_datagram_error(packet_number, timestamp, &e);
             }
             ECError::DeviceError(errors) => {
                 for err in &errors {
@@ -119,11 +123,22 @@ impl ErrorFormatter {
 
     // ─── Event emission ───
 
-    fn emit_datagram_error(&mut self, error: &ECPacketError) {
-        let detail = format!("{:?}", error);
+    fn emit_datagram_error(
+        &mut self,
+        packet_number: u64,
+        timestamp: Duration,
+        error: &ECPacketError,
+    ) {
+        let detail = error.to_string();
         let key = format!("datagram:{}", detail);
-        let msg = Self::format_tagged_line("DATAGRAM", &detail, None, None, Color::Red);
-        self.emit_event(key, msg, 0, Duration::ZERO);
+        let msg = Self::format_tagged_line(
+            "FRAME",
+            &detail,
+            Some(packet_number),
+            Some(timestamp),
+            Color::Red,
+        );
+        self.emit_event(key, msg, packet_number, timestamp);
     }
 
     fn emit_device_error(&mut self, error: &ECDeviceError, correlations: &[ErrorCorrelation]) {
@@ -209,7 +224,7 @@ impl ErrorFormatter {
                         std::mem::discriminant(&d.error)
                     );
                     let detail =
-                        format!("[{}] {} {}", d.subdevice_id, d.command.as_str(), esm_short);
+                        format!("[{}] {}; {}", d.subdevice_id, d.command.as_str(), esm_short);
                     let msg = Self::format_tagged_line(
                         "ESM",
                         &detail,
@@ -311,7 +326,7 @@ impl ErrorFormatter {
                 self.repeat_count += 1;
                 self.repeat_last_frame = frame;
                 self.repeat_last_ts = ts;
-                self.overwrite_repeat_line();
+                self.overwrite_repeat_line(sig);
                 return;
             }
         }
@@ -350,11 +365,12 @@ impl ErrorFormatter {
     }
 
     /// Overwrite the last line on stdout with a summary showing the repeat count.
-    fn overwrite_repeat_line(&mut self) {
-        let base = match self.last_event {
-            Some(ref e) => e.base_message.clone(),
-            None => return,
-        };
+    fn overwrite_repeat_line(&mut self, base: EventSignature) {
+        // let base = match self.last_event {
+        //     Some(ref e) => e.base_message.clone(),
+        //     None => return,
+        // };
+        let base = base.base_message;
 
         // Build the repeat summary line
         let repeat_suffix = format!(
@@ -486,7 +502,7 @@ impl ErrorFormatter {
                 has_error,
             } => {
                 let flag = if *has_error { " +err" } else { "" };
-                format!(" -> {} failed @{}{}", requested, current, flag)
+                format!("-> {} failed @{}{}", requested, current, flag)
             }
         }
     }

@@ -1,9 +1,19 @@
 use smallvec::SmallVec;
+use std::fmt;
 
 #[derive(Debug)]
 pub enum ECPacketError {
     InvalidHeader,
     InvalidDatalength,
+}
+
+impl fmt::Display for ECPacketError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ECPacketError::InvalidHeader => write!(f, "Invalid EtherCAT frame header"),
+            ECPacketError::InvalidDatalength => write!(f, "Invalid EtherCAT datagram data length"),
+        }
+    }
 }
 
 #[derive(Debug)]
