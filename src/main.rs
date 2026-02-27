@@ -20,8 +20,8 @@ fn main() -> Result<()> {
     let config = startup::parse_args();
 
     if config.list_interfaces {
-        println!("{}", style("Available network interfaces:").green());
-        packet_source::get_interface_list().for_each(|iface| {
+        println!("{}", style("■ Available network interfaces:").bold());
+        for iface in packet_source::get_interface_list() {
             println!(
                 "{}",
                 ErrorFormatter::format_interface_line(
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
                     iface.is_default,
                 )
             );
-        });
+        }
         return Ok(());
     }
 

@@ -13,7 +13,6 @@ pub enum VerboseLevel {
     Nothing = 0,  // 何も出力しない
     Normal = 1,   // 基本的なエラー情報
     Detailed = 2, // 詳細なエラー情報
-    Debug = 3,    // 全ての情報（デバッグ用）
 }
 
 impl VerboseLevel {
@@ -21,8 +20,7 @@ impl VerboseLevel {
         match level {
             0 => VerboseLevel::Nothing,
             1 => VerboseLevel::Normal,
-            2 => VerboseLevel::Detailed,
-            _ => VerboseLevel::Debug,
+            _ => VerboseLevel::Detailed,
         }
     }
 }
@@ -236,16 +234,23 @@ impl ErrorFormatter {
                     .unwrap_or_else(|| "—".to_string());
                 let cause = Self::wkc_cause_short(d.expected, d.actual);
                 let key = format!(
-                    "wkc:{}:{}:{}:{}",
+                    "wkc:{}:{}:{}:{}:{}",
                     d.command.as_str(),
+                    d.register,
                     sub,
                     d.expected,
                     d.actual
                 );
+                let reg_str = if d.length == 1 {
+                    format!("{:#06x}", d.register)
+                } else {
+                    format!("{:#06x}..{:04x}", d.register, d.register + d.length - 1)
+                };
                 let detail = format!(
-                    "{} [{}] expected:{} actual:{} ({})",
-                    d.command.as_str(),
+                    "[{}] {} {}; expected:{} actual:{} ({})",
                     sub,
+                    d.command.as_str(),
+                    reg_str,
                     d.expected,
                     d.actual,
                     cause,
@@ -297,9 +302,9 @@ impl ErrorFormatter {
                     .unwrap_or_else(|| "—".to_string());
                 let cause = Self::wkc_cause_short(c.expected, c.actual);
                 let wkc_detail = format!(
-                    "{} [{}] expected:{} actual:{} ({})",
-                    c.command.as_str(),
+                    "[{}] {}; expected:{} actual:{} ({})",
                     sub,
+                    c.command.as_str(),
                     c.expected,
                     c.actual,
                     cause,
@@ -325,7 +330,9 @@ impl ErrorFormatter {
             }
 
             // For ESM errors, print AL Status Code sub-line if available
-            if let Some((subdevice_id, al_code)) = esm_info {
+            if self.verbose >= VerboseLevel::Detailed
+                && let Some((subdevice_id, al_code)) = esm_info
+            {
                 self.last_esm_error = true;
                 self.last_esm_subdevice = Some(subdevice_id);
                 self.last_esm_al_status_code = None;
@@ -572,9 +579,7 @@ impl ErrorFormatter {
     ) -> String {
         let suffix = if is_default { ", default" } else { "" };
         let detail = format!("{} [{}{}]", description, oper_state, suffix);
-        // Build a tagged line with "IF" as placeholder, then replace with the name
-        Self::format_tagged_line("IF", &detail, None, None, Color::Green)
-            .replace("IF      ", &format!("{:<8}", name))
+        Self::format_tagged_line(name, &detail, None, None, Color::Green)
     }
 
     fn print_heavy_separator(&self) {
@@ -636,7 +641,6 @@ mod tests {
     fn test_verbose_level_ordering() {
         assert!(VerboseLevel::Nothing < VerboseLevel::Normal);
         assert!(VerboseLevel::Normal < VerboseLevel::Detailed);
-        assert!(VerboseLevel::Detailed < VerboseLevel::Debug);
     }
 
     #[test]
@@ -700,7 +704,8 @@ mod tests {
         let wkc = WkcErrorDetail {
             packet_number: 10,
             command: ECCommands::FPWR,
-
+            register: 0x1234,
+            length: 2,
             timestamp: Duration::from_secs(1),
             expected: 1,
             actual: 0,

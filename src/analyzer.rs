@@ -15,6 +15,8 @@ pub struct WkcErrorDetail {
     pub timestamp: Duration,
     pub expected: u16,
     pub actual: u16,
+    pub register: u16,
+    pub length: u16,
     pub subdevice_id: Option<SubdeviceIdentifier>,
 }
 
@@ -126,28 +128,34 @@ impl ECDeviceError {
                 if d.actual == 0 {
                     format!(
                         "WKC=0 (expected {}): Complete communication failure — \
-                         no device responded to {} command. \
+                         no device responded to {} command (register address = {:#06x}, length = {}). \
                          Check: cable connections, device power, network topology.",
                         d.expected,
-                        d.command.as_str()
+                        d.command.as_str(),
+                        d.register,
+                        d.length,
                     )
                 } else if d.actual < d.expected {
                     let missing = d.expected - d.actual;
                     format!(
-                        "WKC={} (expected {}): {} device(s) did not respond to {} command. \
+                        "WKC={} (expected {}): {} device(s) did not respond to {} command (register address = {:#06x}, length = {}). \
                          Partial failure — check individual device status and wiring.",
                         d.actual,
                         d.expected,
                         missing,
-                        d.command.as_str()
+                        d.command.as_str(),
+                        d.register,
+                        d.length,
                     )
                 } else {
                     format!(
-                        "WKC={} (expected {}): Unexpected extra responses to {} command. \
+                        "WKC={} (expected {}): Unexpected extra responses to {} command (register address = {:#06x}, length = {}). \
                          Possible address conflict or duplicate device configuration.",
                         d.actual,
                         d.expected,
-                        d.command.as_str()
+                        d.command.as_str(),
+                        d.register,
+                        d.length,
                     )
                 }
             }
@@ -173,7 +181,7 @@ impl ECDeviceError {
                             ""
                         };
                         format!(
-                            "Backward state transition {:?} → {:?}.{} \
+                            "Backward state transition {} -> {}.{} \
                              The device may have encountered an internal fault.",
                             from, to, err_hint
                         )
@@ -567,6 +575,8 @@ trait Command {
                 packet_number: manager.num_frames,
                 command: datagram.command(),
                 timestamp: self.timestamp(),
+                register: datagram.address().1,
+                length: datagram.length(),
                 subdevice_id: self.get_subdevice_id(manager, datagram),
                 expected: manager.expected_wkc,
                 actual: datagram.wkc(),
