@@ -240,6 +240,7 @@ pub fn start_read_pcap(
     output_file: Option<BufWriter<File>>,
     is_pcapng: bool,
     abort_signal: CbReceiver<bool>,
+    time_sync: bool,
 ) -> Result<(
     Option<JoinHandle<()>>,
     CbSender<BytesMut>,
@@ -250,14 +251,14 @@ pub fn start_read_pcap(
     let (tx_recycle, rx_recycle) = unbounded();
 
     let handle = if is_pcapng {
+        let mut pcapng_reader = pcapng::PcapNgReader::new(pcap_file).expect("PCAPNG Reader");
         std::thread::Builder::new()
             .name("PcapNG Reader".to_string())
             .spawn(move || {
-                let mut pcapng_reader =
-                    pcapng::PcapNgReader::new(pcap_file).expect("PCAPNG Reader");
                 let mut initial_frame = true;
                 let mut src_mac = MacAddr::zero();
                 let mut initial_timestamp = Duration::from_secs(0);
+                let time_init = Instant::now();
 
                 while abort_signal.try_recv().is_err()
                     && let Some(Ok(block)) = pcapng_reader.next_block()
@@ -291,6 +292,17 @@ pub fn start_read_pcap(
                     buffer.clear();
                     buffer.put_slice(ethercat_packet);
                     let ethercat_packet = buffer.freeze();
+
+                    if time_sync {
+                        let elapsed = time_init.elapsed();
+                        let sleep_time = if timestamp > elapsed {
+                            timestamp - elapsed
+                        } else {
+                            Duration::from_secs(0)
+                        };
+                        std::thread::sleep(sleep_time);
+                    }
+
                     if tx_data
                         .send(CapturedData {
                             timestamp,
@@ -322,6 +334,7 @@ pub fn start_read_pcap(
                     }
                     None => None,
                 };
+                let time_init = Instant::now();
 
                 while abort_signal.try_recv().is_err()
                     && let Some(Ok(packet)) = pcap_reader.next_packet()
@@ -359,6 +372,17 @@ pub fn start_read_pcap(
                     buffer.clear();
                     buffer.put_slice(ethercat_packet);
                     let ethercat_packet = buffer.freeze();
+
+                    if time_sync {
+                        let elapsed = time_init.elapsed();
+                        let sleep_time = if timestamp > elapsed {
+                            timestamp - elapsed
+                        } else {
+                            Duration::from_secs(0)
+                        };
+                        std::thread::sleep(sleep_time);
+                    }
+
                     if tx_data
                         .send(CapturedData {
                             timestamp,

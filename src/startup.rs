@@ -8,6 +8,7 @@ pub struct Config {
     pub debug: u8,
     pub pcap_source: PcapSource,
     pub output_file: Option<String>,
+    pub time_sync: bool,
 }
 
 pub enum PcapSource {
@@ -46,6 +47,10 @@ pub fn parse_args() -> Config {
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
 
+        /// Synchronize packet timestamps with the current system time (only applicable when reading from a file)
+        #[arg(short = 'T', default_value_t = false)]
+        time_sync: bool,
+
         #[arg(short, long, hide = true, action = clap::ArgAction::Count)]
         debug: u8,
     }
@@ -76,6 +81,7 @@ pub fn parse_args() -> Config {
         debug: args.debug,
         pcap_source,
         output_file: args.write,
+        time_sync: args.time_sync,
     }
 }
 

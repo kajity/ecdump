@@ -4,7 +4,6 @@ mod logger;
 mod packet_source;
 mod startup;
 
-use analyzer::ECError;
 use anyhow::{Context, Result};
 use bytes::BytesMut;
 use console::style;
@@ -66,10 +65,14 @@ fn main() -> Result<()> {
             let file_in = File::open(&file.file_path)
                 .with_context(|| format!("Failed to open pcap file: {}", &file.file_path))?;
 
-            packet_source::start_read_pcap(file_in, file_out, file.is_pcapng, abort_rx2)
-                .with_context(|| {
-                    format!("Failed to start reading pcap file: {}", &file.file_path)
-                })?
+            packet_source::start_read_pcap(
+                file_in,
+                file_out,
+                file.is_pcapng,
+                abort_rx2,
+                config.time_sync,
+            )
+            .with_context(|| format!("Failed to start reading pcap file: {}", &file.file_path))?
         }
 
         PcapSource::Interface(interface) => {
@@ -85,7 +88,8 @@ fn main() -> Result<()> {
             .expect("Error setting Ctrl-C handler");
 
             debug!("Using network interface: {}", interface.name);
-            packet_source::start_packet_receive(interface, file_out, abort_rx2)?
+            packet_source::start_packet_receive(interface, file_out, abort_rx2)
+                .with_context(|| "Failed to start packet capture on network interface.")?
         }
     };
 
