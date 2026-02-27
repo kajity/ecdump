@@ -74,6 +74,7 @@ impl AlStatus {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u16)]
+#[allow(dead_code)]
 pub enum AlStatusCode {
     /// No error
     NoError = 0x0000,
@@ -183,6 +184,138 @@ pub enum AlStatusCode {
     ApplicationControllerAvailable = 0x00F0,
     // NOTE: Other codes < 0x8000 are reserved.
     // NOTE: Codes 0x8000 - 0xffff are vendor specific.
+}
+
+impl AlStatusCode {
+    /// Convert a raw `u16` AL Status Code value to the corresponding enum variant.
+    /// Returns `None` for unknown/vendor-specific codes.
+    pub fn from_u16(code: u16) -> Option<Self> {
+        match code {
+            0x0000 => Some(AlStatusCode::NoError),
+            0x0001 => Some(AlStatusCode::UnspecifiedError),
+            0x0002 => Some(AlStatusCode::NoMemory),
+            0x0003 => Some(AlStatusCode::InvalidDeviceSetup),
+            0x0005 => Some(AlStatusCode::CompatibilityReserved),
+            0x0011 => Some(AlStatusCode::InvalidRequestedStateChange),
+            0x0012 => Some(AlStatusCode::UnknownRequestedState),
+            0x0013 => Some(AlStatusCode::BootstrapNotSupported),
+            0x0014 => Some(AlStatusCode::NoValidFirmware),
+            0x0015 => Some(AlStatusCode::InvalidMailboxConfiguration),
+            0x0016 => Some(AlStatusCode::InvalidMailboxConfiguration2),
+            0x0017 => Some(AlStatusCode::InvalidSyncManagerConfiguration),
+            0x0018 => Some(AlStatusCode::NoValidInputsAvailable),
+            0x0019 => Some(AlStatusCode::NoValidOutputs),
+            0x001A => Some(AlStatusCode::SynchronizationError),
+            0x001B => Some(AlStatusCode::SyncManagerWatchdog),
+            0x001C => Some(AlStatusCode::InvalidSyncManagerTypes),
+            0x001D => Some(AlStatusCode::InvalidOutputConfiguration),
+            0x001E => Some(AlStatusCode::InvalidInputConfiguration),
+            0x001F => Some(AlStatusCode::InvalidWatchdogConfiguration),
+            0x0020 => Some(AlStatusCode::SubDeviceNeedsColdStart),
+            0x0021 => Some(AlStatusCode::SubDeviceNeedsInit),
+            0x0022 => Some(AlStatusCode::SubDeviceNeedsPreop),
+            0x0023 => Some(AlStatusCode::SubDeviceNeedsSafeop),
+            0x0024 => Some(AlStatusCode::InvalidInputMapping),
+            0x0025 => Some(AlStatusCode::InvalidOutputMapping),
+            0x0026 => Some(AlStatusCode::InconsistentSettings),
+            0x0027 => Some(AlStatusCode::FreeRunNotSupported),
+            0x0028 => Some(AlStatusCode::SyncModeNotSupported),
+            0x0029 => Some(AlStatusCode::FreeRunNeeds3BufferMode),
+            0x002A => Some(AlStatusCode::BackgroundWatchdog),
+            0x002B => Some(AlStatusCode::NoValidInputsAndOutputs),
+            0x002C => Some(AlStatusCode::FatalSyncError),
+            0x002D => Some(AlStatusCode::NoSyncError),
+            0x0030 => Some(AlStatusCode::InvalidDcSyncConfiguration),
+            0x0031 => Some(AlStatusCode::InvalidDcLatchConfiguration),
+            0x0032 => Some(AlStatusCode::PllError),
+            0x0033 => Some(AlStatusCode::DcSyncIoError),
+            0x0034 => Some(AlStatusCode::DcSyncTimeoutError),
+            0x0035 => Some(AlStatusCode::DcInvalidSyncCycleTime),
+            0x0036 => Some(AlStatusCode::DcSync0CycleTime),
+            0x0037 => Some(AlStatusCode::DcSync1CycleTime),
+            0x0041 => Some(AlStatusCode::MbxAoe),
+            0x0042 => Some(AlStatusCode::MbxEoe),
+            0x0043 => Some(AlStatusCode::MbxCoe),
+            0x0044 => Some(AlStatusCode::MbxFoe),
+            0x0045 => Some(AlStatusCode::MbxSoe),
+            0x004F => Some(AlStatusCode::MbxVoe),
+            0x0050 => Some(AlStatusCode::EepromNoAccess),
+            0x0051 => Some(AlStatusCode::EepromError),
+            0x0060 => Some(AlStatusCode::SubDeviceRestartedLocally),
+            0x0061 => Some(AlStatusCode::DeviceIdentificationValueUpdated),
+            0x00F0 => Some(AlStatusCode::ApplicationControllerAvailable),
+            _ => None,
+        }
+    }
+
+    /// Returns a human-readable name for this AL Status Code.
+    pub fn name(&self) -> &'static str {
+        match self {
+            AlStatusCode::NoError => "No error",
+            AlStatusCode::UnspecifiedError => "Unspecified error",
+            AlStatusCode::NoMemory => "No Memory",
+            AlStatusCode::InvalidDeviceSetup => "Invalid Device Setup",
+            AlStatusCode::CompatibilityReserved => "Reserved (compatibility)",
+            AlStatusCode::InvalidRequestedStateChange => "Invalid requested state change",
+            AlStatusCode::UnknownRequestedState => "Unknown requested state",
+            AlStatusCode::BootstrapNotSupported => "Bootstrap not supported",
+            AlStatusCode::NoValidFirmware => "No valid firmware",
+            AlStatusCode::InvalidMailboxConfiguration => "Invalid mailbox configuration",
+            AlStatusCode::InvalidMailboxConfiguration2 => "Invalid mailbox configuration (2)",
+            AlStatusCode::InvalidSyncManagerConfiguration => "Invalid sync manager configuration",
+            AlStatusCode::NoValidInputsAvailable => "No valid inputs available",
+            AlStatusCode::NoValidOutputs => "No valid outputs",
+            AlStatusCode::SynchronizationError => "Synchronization error",
+            AlStatusCode::SyncManagerWatchdog => "Sync manager watchdog",
+            AlStatusCode::InvalidSyncManagerTypes => "Invalid Sync Manager Types",
+            AlStatusCode::InvalidOutputConfiguration => "Invalid Output Configuration",
+            AlStatusCode::InvalidInputConfiguration => "Invalid Input Configuration",
+            AlStatusCode::InvalidWatchdogConfiguration => "Invalid Watchdog Configuration",
+            AlStatusCode::SubDeviceNeedsColdStart => "SubDevice needs cold start",
+            AlStatusCode::SubDeviceNeedsInit => "SubDevice needs INIT",
+            AlStatusCode::SubDeviceNeedsPreop => "SubDevice needs PREOP",
+            AlStatusCode::SubDeviceNeedsSafeop => "SubDevice needs SAFEOP",
+            AlStatusCode::InvalidInputMapping => "Invalid Input Mapping",
+            AlStatusCode::InvalidOutputMapping => "Invalid Output Mapping",
+            AlStatusCode::InconsistentSettings => "Inconsistent Settings",
+            AlStatusCode::FreeRunNotSupported => "FreeRun not supported",
+            AlStatusCode::SyncModeNotSupported => "SyncMode not supported",
+            AlStatusCode::FreeRunNeeds3BufferMode => "FreeRun needs 3 Buffer Mode",
+            AlStatusCode::BackgroundWatchdog => "Background Watchdog",
+            AlStatusCode::NoValidInputsAndOutputs => "No Valid Inputs and Outputs",
+            AlStatusCode::FatalSyncError => "Fatal Sync Error",
+            AlStatusCode::NoSyncError => "No Sync Error",
+            AlStatusCode::InvalidDcSyncConfiguration => "Invalid DC SYNC Configuration",
+            AlStatusCode::InvalidDcLatchConfiguration => "Invalid DC Latch Configuration",
+            AlStatusCode::PllError => "PLL Error",
+            AlStatusCode::DcSyncIoError => "DC Sync IO Error",
+            AlStatusCode::DcSyncTimeoutError => "DC Sync Timeout Error",
+            AlStatusCode::DcInvalidSyncCycleTime => "DC Invalid Sync Cycle Time",
+            AlStatusCode::DcSync0CycleTime => "DC Sync0 Cycle Time",
+            AlStatusCode::DcSync1CycleTime => "DC Sync1 Cycle Time",
+            AlStatusCode::MbxAoe => "Mailbox AoE",
+            AlStatusCode::MbxEoe => "Mailbox EoE",
+            AlStatusCode::MbxCoe => "Mailbox CoE",
+            AlStatusCode::MbxFoe => "Mailbox FoE",
+            AlStatusCode::MbxSoe => "Mailbox SoE",
+            AlStatusCode::MbxVoe => "Mailbox VoE",
+            AlStatusCode::EepromNoAccess => "EEPROM no access",
+            AlStatusCode::EepromError => "EEPROM Error",
+            AlStatusCode::SubDeviceRestartedLocally => "SubDevice restarted locally",
+            AlStatusCode::DeviceIdentificationValueUpdated => "Device Identification value updated",
+            AlStatusCode::ApplicationControllerAvailable => "Application controller available",
+        }
+    }
+}
+
+/// Format a raw AL Status Code `u16` value as a human-readable string.
+/// Known codes are resolved to their name; unknown codes show as hex.
+pub fn format_al_status_code(code: u16) -> String {
+    match AlStatusCode::from_u16(code) {
+        Some(known) => format!("{:#06x} ({})", code, known.name()),
+        None if code >= 0x8000 => format!("{:#06x} (vendor specific)", code),
+        None => format!("{:#06x} (unknown)", code),
+    }
 }
 
 #[allow(non_snake_case)]

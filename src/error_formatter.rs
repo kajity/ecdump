@@ -1,9 +1,12 @@
 use console::{Color, Style, Term, measure_text_width, style};
-use std::io::Write;
 use std::time::Duration;
 
-use crate::analyzer::{ECDeviceError, ECError, ErrorCorrelation, StateTransition, WkcErrorDetail};
+use crate::analyzer::{
+    AlStatusCodeUpdate, ECDeviceError, ECError, ErrorCorrelation, StateTransition, WkcErrorDetail,
+};
 use ecdump::ec_packet::ECPacketError;
+use ecdump::registers::format_al_status_code;
+use ecdump::subdevice::SubdeviceIdentifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerboseLevel {
@@ -50,6 +53,16 @@ pub struct ErrorFormatter {
     repeat_last_ts: Duration,
     /// Number of terminal lines occupied by the last printed repeat/event line.
     last_printed_lines: usize,
+    /// Whether the last emitted event was an ESM error (any type).
+    last_esm_error: bool,
+    /// The subdevice identifier for the last ESM error.
+    last_esm_subdevice: Option<SubdeviceIdentifier>,
+    /// The AL Status Code currently displayed for the last ESM error (if any).
+    last_esm_al_status_code: Option<u16>,
+    /// Number of terminal lines occupied by the AL Status Code sub-line (0 if not printed).
+    last_al_status_lines: usize,
+    /// Total number of extra sub-lines printed after the last ESM event (correlation + diagnosis + al_status).
+    last_esm_sub_lines: usize,
 }
 
 impl ErrorFormatter {
@@ -64,10 +77,34 @@ impl ErrorFormatter {
             repeat_last_frame: 0,
             repeat_last_ts: Duration::ZERO,
             last_printed_lines: 0,
+            last_esm_error: false,
+            last_esm_subdevice: None,
+            last_esm_al_status_code: None,
+            last_al_status_lines: 0,
+            last_esm_sub_lines: 0,
         }
     }
 
     // ─── Public API: called during capture ───
+
+    /// Report AL Status Code updates for devices with pending ESM errors.
+    /// If the last displayed event was an ESM error for the given subdevice,
+    /// the output will be rewritten to include the updated AL Status Code.
+    pub fn report_al_status_code_updates(&mut self, updates: &[AlStatusCodeUpdate]) {
+        if self.verbose == VerboseLevel::Nothing || !self.last_esm_error {
+            return;
+        }
+
+        for update in updates {
+            if self.last_esm_subdevice.as_ref() == Some(&update.subdevice_id) {
+                let already_shown = self.last_esm_al_status_code;
+                if already_shown == Some(update.al_status_code) {
+                    continue; // No change
+                }
+                self.rewrite_al_status_code_line(update.al_status_code);
+            }
+        }
+    }
 
     /// Report errors detected in an EtherCAT frame. Called immediately during capture.
     /// If correlations are provided, ESM errors will show their related WKC error as a sub-line.
@@ -142,103 +179,115 @@ impl ErrorFormatter {
     }
 
     fn emit_device_error(&mut self, error: &ECDeviceError, correlations: &[ErrorCorrelation]) {
-        let (key, msg, frame, ts, corr): (String, String, u64, Duration, Option<WkcErrorDetail>) =
-            match error {
-                ECDeviceError::InvalidAutoIncrementAddress {
-                    packet_number,
-                    timestamp,
-                    command,
-                    address,
-                } => {
-                    let key = format!("addr:auto_inc:{:#06x}:{}", address, command.as_str());
-                    let detail = format!(
-                        "{} auto-increment {:#06x} not found",
-                        command.as_str(),
-                        address
-                    );
-                    let msg = Self::format_tagged_line(
-                        "ADDR",
-                        &detail,
-                        Some(*packet_number),
-                        Some(*timestamp),
-                        Color::Yellow,
-                    );
-                    (key, msg, *packet_number, *timestamp, None)
-                }
-                ECDeviceError::InvalidConfiguredAddress {
-                    packet_number,
-                    timestamp,
-                    command,
-                    address,
-                } => {
-                    let key = format!("addr:config:{:#06x}:{}", address, command.as_str());
-                    let detail =
-                        format!("{} configured {:#06x} not found", command.as_str(), address);
-                    let msg = Self::format_tagged_line(
-                        "ADDR",
-                        &detail,
-                        Some(*packet_number),
-                        Some(*timestamp),
-                        Color::Yellow,
-                    );
-                    (key, msg, *packet_number, *timestamp, None)
-                }
-                ECDeviceError::InvalidWkc(d) => {
-                    let sub = d
-                        .subdevice_id
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "—".to_string());
-                    let cause = Self::wkc_cause_short(d.expected, d.actual);
-                    let key = format!(
-                        "wkc:{}:{}:{}:{}",
-                        d.command.as_str(),
-                        sub,
-                        d.expected,
-                        d.actual
-                    );
-                    let detail = format!(
-                        "{} [{}] expected:{} actual:{} ({})",
-                        d.command.as_str(),
-                        sub,
-                        d.expected,
-                        d.actual,
-                        cause,
-                    );
-                    let msg = Self::format_tagged_line(
-                        "WKC",
-                        &detail,
-                        Some(d.packet_number),
-                        Some(d.timestamp),
-                        Color::Red,
-                    );
-                    (key, msg, d.packet_number, d.timestamp, None)
-                }
-                ECDeviceError::ESMError(d) => {
-                    let esm_short = Self::esm_error_short(&d.error);
-                    // Include the correlated WKC error in the dedup key so that
-                    // the same ESM+WKC pair collapses together.
-                    let corr = Self::find_correlation_for_esm(d, correlations);
-                    let key = format!(
-                        "esm:{}:{:?}",
-                        d.subdevice_id,
-                        std::mem::discriminant(&d.error)
-                    );
-                    let detail =
-                        format!("[{}] {}; {}", d.subdevice_id, d.command.as_str(), esm_short);
-                    let msg = Self::format_tagged_line(
-                        "ESM",
-                        &detail,
-                        Some(d.packet_number),
-                        Some(d.timestamp),
-                        Color::Magenta,
-                    );
-                    (key, msg, d.packet_number, d.timestamp, corr)
-                }
-            };
+        // A new device error is being emitted — clear ESM tracking
+        // (it will be re-set below if this error is itself an ESM error)
+        self.clear_esm_tracking();
+
+        let (key, msg, frame, ts, corr, esm_info): (
+            String,
+            String,
+            u64,
+            Duration,
+            Option<WkcErrorDetail>,
+            Option<(SubdeviceIdentifier, Option<u16>)>,
+        ) = match error {
+            ECDeviceError::InvalidAutoIncrementAddress {
+                packet_number,
+                timestamp,
+                command,
+                address,
+            } => {
+                let key = format!("addr:auto_inc:{:#06x}:{}", address, command.as_str());
+                let detail = format!(
+                    "{} auto-increment {:#06x} not found",
+                    command.as_str(),
+                    address
+                );
+                let msg = Self::format_tagged_line(
+                    "ADDR",
+                    &detail,
+                    Some(*packet_number),
+                    Some(*timestamp),
+                    Color::Yellow,
+                );
+                (key, msg, *packet_number, *timestamp, None, None)
+            }
+            ECDeviceError::InvalidConfiguredAddress {
+                packet_number,
+                timestamp,
+                command,
+                address,
+            } => {
+                let key = format!("addr:config:{:#06x}:{}", address, command.as_str());
+                let detail = format!("{} configured {:#06x} not found", command.as_str(), address);
+                let msg = Self::format_tagged_line(
+                    "ADDR",
+                    &detail,
+                    Some(*packet_number),
+                    Some(*timestamp),
+                    Color::Yellow,
+                );
+                (key, msg, *packet_number, *timestamp, None, None)
+            }
+            ECDeviceError::InvalidWkc(d) => {
+                let sub = d
+                    .subdevice_id
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "—".to_string());
+                let cause = Self::wkc_cause_short(d.expected, d.actual);
+                let key = format!(
+                    "wkc:{}:{}:{}:{}",
+                    d.command.as_str(),
+                    sub,
+                    d.expected,
+                    d.actual
+                );
+                let detail = format!(
+                    "{} [{}] expected:{} actual:{} ({})",
+                    d.command.as_str(),
+                    sub,
+                    d.expected,
+                    d.actual,
+                    cause,
+                );
+                let msg = Self::format_tagged_line(
+                    "WKC",
+                    &detail,
+                    Some(d.packet_number),
+                    Some(d.timestamp),
+                    Color::Red,
+                );
+                (key, msg, d.packet_number, d.timestamp, None, None)
+            }
+            ECDeviceError::ESMError(d) => {
+                let esm_short = Self::esm_error_short(&d.error);
+                // Include the correlated WKC error in the dedup key so that
+                // the same ESM+WKC pair collapses together.
+                let corr = Self::find_correlation_for_esm(d, correlations);
+                let key = format!(
+                    "esm:{}:{:?}",
+                    d.subdevice_id,
+                    std::mem::discriminant(&d.error)
+                );
+                let detail = format!("[{}] {}; {}", d.subdevice_id, d.command.as_str(), esm_short);
+                let msg = Self::format_tagged_line(
+                    "ESM",
+                    &detail,
+                    Some(d.packet_number),
+                    Some(d.timestamp),
+                    Color::Magenta,
+                );
+                // Track ESM error info for AL Status Code updates
+                let esm_info = Some((d.subdevice_id, d.al_status_code));
+
+                (key, msg, d.packet_number, d.timestamp, corr, esm_info)
+            }
+        };
 
         self.emit_event(key, msg, frame, ts);
 
         // Print sub-lines only for the first occurrence (not during repeats)
+        let mut sub_lines_count: usize = 0;
         if self.repeat_count <= 1 {
             // Show correlated WKC error as a sub-line (same format as WKC error display)
             if let Some(ref c) = corr {
@@ -263,17 +312,81 @@ impl ErrorFormatter {
                     Color::Red,
                 );
                 println!("{} {}", style("         └─").color256(244), wkc_sub_line);
+                sub_lines_count +=
+                    self.count_terminal_lines(&format!("         └─ {}", wkc_sub_line));
             }
 
             // In Detailed mode, also print the diagnosis on a separate line
             if self.verbose >= VerboseLevel::Detailed {
                 let diagnosis = error.diagnosis();
-                println!(
-                    "{}",
-                    style(format!("         └─ {}", diagnosis)).color256(244)
-                );
+                let diag_line = format!("         └─ {}", diagnosis);
+                sub_lines_count += self.count_terminal_lines(&diag_line);
+                println!("{}", style(&diag_line).color256(244));
+            }
+
+            // For ESM errors, print AL Status Code sub-line if available
+            if let Some((subdevice_id, al_code)) = esm_info {
+                self.last_esm_error = true;
+                self.last_esm_subdevice = Some(subdevice_id);
+                self.last_esm_al_status_code = None;
+                self.last_al_status_lines = 0;
+                self.last_esm_sub_lines = sub_lines_count;
+
+                if let Some(code) = al_code {
+                    let al_line = format!(
+                        "         └─ AL Status Code: {}",
+                        format_al_status_code(code)
+                    );
+                    let lines = self.count_terminal_lines(&al_line);
+                    println!("{}", style(&al_line).color256(244));
+                    self.last_esm_al_status_code = Some(code);
+                    self.last_al_status_lines = lines;
+                    self.last_esm_sub_lines += lines;
+                }
             }
         }
+    }
+
+    /// Rewrite (or append) the AL Status Code sub-line for the last ESM error.
+    fn rewrite_al_status_code_line(&mut self, code: u16) {
+        let al_line = format!(
+            "         └─ AL Status Code: {}",
+            format_al_status_code(code)
+        );
+        let new_lines = self.count_terminal_lines(&al_line);
+
+        if self.last_al_status_lines > 0 {
+            // There is an existing AL Status Code line — overwrite it
+            let _ = self.term.clear_last_lines(self.last_al_status_lines);
+            println!("{}", style(&al_line).color256(244));
+            let _ = self.term.flush();
+            // Update the line count difference in sub_lines
+            self.last_esm_sub_lines =
+                self.last_esm_sub_lines - self.last_al_status_lines + new_lines;
+        } else {
+            // No existing AL Status Code line — append a new one
+            println!("{}", style(&al_line).color256(244));
+            let _ = self.term.flush();
+            self.last_esm_sub_lines += new_lines;
+        }
+
+        self.last_esm_al_status_code = Some(code);
+        self.last_al_status_lines = new_lines;
+        // Also update total printed lines to include the sub-lines
+        self.last_printed_lines += if self.last_al_status_lines > 0 {
+            0
+        } else {
+            new_lines
+        };
+    }
+
+    /// Clear ESM error tracking state.
+    fn clear_esm_tracking(&mut self) {
+        self.last_esm_error = false;
+        self.last_esm_subdevice = None;
+        self.last_esm_al_status_code = None;
+        self.last_al_status_lines = 0;
+        self.last_esm_sub_lines = 0;
     }
 
     fn emit_state_transition(&mut self, tr: &StateTransition) {
@@ -409,6 +522,7 @@ impl ErrorFormatter {
         self.last_event = None;
         self.repeat_count = 0;
         self.last_printed_lines = 0;
+        self.clear_esm_tracking();
     }
 
     // ─── Formatting helpers ───
@@ -586,7 +700,7 @@ mod tests {
         let wkc = WkcErrorDetail {
             packet_number: 10,
             command: ECCommands::FPWR,
-            from_main: true,
+
             timestamp: Duration::from_secs(1),
             expected: 1,
             actual: 0,
@@ -603,6 +717,7 @@ mod tests {
                 to: ECState::SafeOp,
                 has_error: true,
             },
+            al_status_code: None,
         };
 
         let corr = ErrorCorrelation {

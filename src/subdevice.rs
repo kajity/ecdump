@@ -70,7 +70,6 @@ impl fmt::Display for SubdeviceIdentifier {
 #[derive(Debug)]
 pub struct SubDevice {
     state: ECState,
-    has_esm_error: bool,
     configured_address: Option<u16>,
     al_status: Option<AlStatus>,
     al_status_code: Option<u16>,
@@ -84,7 +83,6 @@ impl SubDevice {
     pub fn new() -> Self {
         SubDevice {
             state: ECState::Init,
-            has_esm_error: false,
             configured_address: None,
             al_status: None,
             al_status_code: None,
@@ -97,6 +95,10 @@ impl SubDevice {
 
     pub fn configured_address(&self) -> Option<u16> {
         self.configured_address
+    }
+
+    pub fn al_status_code(&self) -> Option<u16> {
+        self.al_status_code
     }
 
     pub fn state(&self) -> ECState {
@@ -238,6 +240,7 @@ pub trait CommandStepper {
                         let old_state = subdevice.state;
                         subdevice.state = new_state;
                         if new_state > requested_state {
+                            subdevice.load_al_status_code();
                             return Err(ESMError::InvalidStateTransition {
                                 requested: requested_state,
                                 current: subdevice.state,
@@ -252,7 +255,6 @@ pub trait CommandStepper {
                                 old_state,
                                 new_state
                             );
-                            subdevice.has_esm_error = true;
                             subdevice.load_al_status_code();
                             return Err(ESMError::BackwardTransition {
                                 from: old_state,
@@ -267,6 +269,7 @@ pub trait CommandStepper {
                                 subdevice.identifier(),
                                 requested_state
                             );
+                            subdevice.load_al_status_code();
                             return Err(ESMError::TransitionFailed {
                                 requested: requested_state,
                                 current: new_state,
@@ -288,11 +291,11 @@ pub trait CommandStepper {
                         let old_state = subdevice.state;
                         subdevice.state = new_state;
                         if subdevice.al_control.is_none() {
+                            subdevice.load_al_status_code();
                             return Err(ESMError::IllegalTransition { to: new_state });
                         }
 
                         if new_state < old_state {
-                            subdevice.has_esm_error = true;
                             subdevice.load_al_status_code();
                             return Err(ESMError::BackwardTransition {
                                 from: old_state,
@@ -301,6 +304,7 @@ pub trait CommandStepper {
                             });
                         }
                         if new_state > old_state {
+                            subdevice.load_al_status_code();
                             return Err(ESMError::InvalidStateTransition {
                                 requested: old_state,
                                 current: new_state,

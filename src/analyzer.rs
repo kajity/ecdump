@@ -25,6 +25,14 @@ pub struct ESMErrorDetail {
     pub command: ECCommand,
     pub subdevice_id: SubdeviceIdentifier,
     pub error: ESMError,
+    pub al_status_code: Option<u16>,
+}
+
+/// Notification that a device's AL Status Code has been updated after an ESM error.
+#[derive(Debug, Clone)]
+pub struct AlStatusCodeUpdate {
+    pub subdevice_id: SubdeviceIdentifier,
+    pub al_status_code: u16,
 }
 
 #[derive(Debug, Clone)]
@@ -232,6 +240,9 @@ pub struct DeviceManager {
     pending_transitions: Vec<StateTransition>,
     /// Correlations detected during the most recent analyze_packet call.
     pending_correlations: Vec<ErrorCorrelation>,
+    /// Tracks devices with pending ESM errors whose AL Status Code was unknown.
+    /// Maps device index to the last known al_status_code (None if not yet known).
+    pending_esm_al_status: Vec<(usize, Option<u16>)>,
 }
 
 impl DeviceManager {
@@ -245,6 +256,7 @@ impl DeviceManager {
             wkc_error_history: VecDeque::new(),
             pending_transitions: Vec::new(),
             pending_correlations: Vec::new(),
+            pending_esm_al_status: Vec::new(),
         }
     }
 
@@ -386,6 +398,23 @@ impl DeviceManager {
                         "#{} ESM Error [{}]: {:?}",
                         esm_error.packet_number, esm_error.subdevice_id, esm_error.error
                     );
+
+                    // Track devices with ESM errors for AL Status Code updates.
+                    // The AL Status Code may not be available yet at error time
+                    // and could arrive in a later packet.
+                    {
+                        let device_idx = self
+                            .devices
+                            .iter()
+                            .position(|d| d.identifier() == esm_error.subdevice_id);
+                        if let Some(idx) = device_idx {
+                            // Remove any previous tracking for the same device
+                            self.pending_esm_al_status.retain(|(i, _)| *i != idx);
+                            self.pending_esm_al_status
+                                .push((idx, esm_error.al_status_code));
+                        }
+                    }
+
                     let err = ECDeviceError::ESMError(esm_error);
                     errors.push(err);
                     self.correlate_esm_with_wkc(&esm_error);
@@ -461,6 +490,43 @@ impl DeviceManager {
 
     pub fn get_frame_count(&self) -> u64 {
         self.num_frames
+    }
+
+    /// Check if any tracked devices have had their AL Status Code updated since the last ESM error.
+    /// Returns updates for devices whose AL Status Code has changed or become available.
+    /// This should be called after `analyze_packet` to detect deferred AL Status Code availability.
+    pub fn check_al_status_code_updates(&mut self) -> Vec<AlStatusCodeUpdate> {
+        let mut updates = Vec::new();
+        let mut to_remove = Vec::new();
+
+        for (i, (device_idx, last_known)) in self.pending_esm_al_status.iter_mut().enumerate() {
+            if *device_idx < self.devices.len() {
+                let current_code = self.devices[*device_idx].al_status_code();
+                if let Some(code) = current_code {
+                    // AL Status Code is now available (or changed)
+                    let changed = match *last_known {
+                        None => true,
+                        Some(prev) => prev != code,
+                    };
+                    if changed {
+                        *last_known = Some(code);
+                        updates.push(AlStatusCodeUpdate {
+                            subdevice_id: self.devices[*device_idx].identifier(),
+                            al_status_code: code,
+                        });
+                    }
+                }
+            } else {
+                to_remove.push(i);
+            }
+        }
+
+        // Clean up entries for removed devices (iterate in reverse to preserve indices)
+        for i in to_remove.into_iter().rev() {
+            self.pending_esm_al_status.remove(i);
+        }
+
+        updates
     }
 
     /// Take any pending state transitions detected during the last analyze_packet call.
@@ -555,12 +621,14 @@ impl Command for BrdCommand {
                 device
                     .state_machine_step::<subdevice::BrdCommandStepper>(manager.num_frames)
                     .map_err(|e| {
+                        let al_code = device.al_status_code();
                         ECDeviceError::ESMError(ESMErrorDetail {
                             packet_number: manager.num_frames,
                             timestamp: self.timestamp,
                             command: datagram.command(),
                             subdevice_id: device.identifier(),
                             error: e,
+                            al_status_code: al_code,
                         })
                     })?;
             }
@@ -785,12 +853,14 @@ impl Command for AprdCommand {
             let esm_result = device
                 .state_machine_step::<subdevice::AprdCommandStepper>(manager.num_frames)
                 .map_err(|e| {
+                    let al_code = device.al_status_code();
                     ECDeviceError::ESMError(ESMErrorDetail {
                         packet_number: manager.num_frames,
                         timestamp: self.timestamp,
                         command: datagram.command(),
                         subdevice_id: device.identifier(),
                         error: e,
+                        al_status_code: al_code,
                     })
                 });
 
@@ -954,12 +1024,14 @@ impl Command for FprdCommand {
             if let Err(e) =
                 device.state_machine_step::<subdevice::FprdCommandStepper>(manager.num_frames)
             {
+                let al_code = device.al_status_code();
                 return Err(ECDeviceError::ESMError(ESMErrorDetail {
                     packet_number: manager.num_frames,
                     timestamp: self.timestamp,
                     command: datagram.command(),
                     subdevice_id: device.identifier(),
                     error: e,
+                    al_status_code: al_code,
                 }));
             }
         }

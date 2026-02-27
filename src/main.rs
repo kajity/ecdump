@@ -133,6 +133,15 @@ fn main() -> Result<()> {
                             error_formatter.report(error, &correlations);
                         }
 
+                        // Check if any AL Status Codes have been updated for
+                        // devices with pending ESM backward transition errors.
+                        // This handles the case where the AL Status Code becomes
+                        // available in a later packet.
+                        let al_updates = device_manager.check_al_status_code_updates();
+                        if !al_updates.is_empty() {
+                            error_formatter.report_al_status_code_updates(&al_updates);
+                        }
+
                     }
                     Err(_) => {
                         break;
