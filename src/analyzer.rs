@@ -602,8 +602,6 @@ trait Command {
 
     fn timestamp(&self) -> Duration;
 
-    fn from_main(&self) -> bool;
-
     fn get_subdevice_id(
         &self,
         manager: &DeviceManager,
@@ -675,10 +673,6 @@ impl Command for BrdCommand {
         self.timestamp
     }
 
-    fn from_main(&self) -> bool {
-        self.from_main
-    }
-
     fn get_subdevice_id(
         &self,
         _manager: &DeviceManager,
@@ -722,10 +716,6 @@ impl Command for BwrCommand {
 
     fn timestamp(&self) -> Duration {
         self.timestamp
-    }
-
-    fn from_main(&self) -> bool {
-        self.from_main
     }
 
     fn get_subdevice_id(
@@ -792,10 +782,6 @@ impl Command for ApwrCommand {
 
     fn timestamp(&self) -> Duration {
         self.timestamp
-    }
-
-    fn from_main(&self) -> bool {
-        self.from_main
     }
 
     fn get_subdevice_id(
@@ -898,10 +884,6 @@ impl Command for AprdCommand {
         self.timestamp
     }
 
-    fn from_main(&self) -> bool {
-        self.from_main
-    }
-
     fn get_subdevice_id(
         &self,
         manager: &DeviceManager,
@@ -988,10 +970,6 @@ impl Command for FpwrCommand {
         self.timestamp
     }
 
-    fn from_main(&self) -> bool {
-        self.from_main
-    }
-
     fn get_subdevice_id(
         &self,
         manager: &DeviceManager,
@@ -1060,10 +1038,6 @@ impl Command for FprdCommand {
 
     fn timestamp(&self) -> Duration {
         self.timestamp
-    }
-
-    fn from_main(&self) -> bool {
-        self.from_main
     }
 
     fn get_subdevice_id(

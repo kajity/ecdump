@@ -1,6 +1,5 @@
 mod analyzer;
 mod error_formatter;
-mod logger;
 mod packet_source;
 mod startup;
 

@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow, bail};
 use bytes::{BufMut, Bytes, BytesMut};
 use crossbeam_channel::{Receiver as CbReceiver, Sender as CbSender, bounded, select, unbounded};
-use log::{error, info};
+use log::error;
 use netdev::prelude::OperState;
 use pcap_file::pcap::PcapWriter;
 use pcap_file::{pcap, pcapng, pcapng::Block as PcapNgBlock};
