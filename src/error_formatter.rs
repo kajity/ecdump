@@ -103,19 +103,17 @@ trait LineComponent {
             let _ = term.move_cursor_up(clear_count - 1);
         }
 
-        // Print the new content without a trailing newline so we control movement.
-        print!("{}", new_rendered);
+        // Re-render the component from the top of its region.
+        // print!("{}", new_rendered);
+        let _ = term.write_line(new_rendered);
 
-        // Advance past any remaining lines in the component region and past the
-        // lines_below section to restore the cursor to the original bottom.
-        // `print!` leaves the cursor at the end of the last printed character;
-        // `println!` would put us on the next line.  We emit a newline here to
-        // land on the line just after the new content.
+        // Always move to the line below this component before restoring the
+        // original bottom position. Without this, a non-wrapping line leaves
+        // the cursor at end-of-line and the next rewrite moves up too far.
+        let _ = term.move_cursor_down(1);
+
         if lines_below > 0 {
-            println!();
-            if lines_below > 1 {
-                let _ = term.move_cursor_down(lines_below - 1);
-            }
+            let _ = term.move_cursor_down(lines_below);
         }
 
         new_count
@@ -148,12 +146,6 @@ impl EventLine {
             frame,
             timestamp,
         }
-    }
-
-    /// Update the detail content of this event line.
-    #[allow(dead_code)]
-    fn update_detail(&mut self, new_detail: String) {
-        self.detail = new_detail;
     }
 
     /// Add a repeat summary to the event line.
@@ -189,12 +181,25 @@ impl EventLine {
             "{}",
             tag_style.apply_to(format!("{:<8}", self.tag))
         ));
+        out.push(' ');
 
-        if let (Some(f), Some(ts)) = (self.frame, self.timestamp) {
-            out.push_str(&format!(
-                "{} ",
-                dim_style.apply_to(format!("#{:<6} [{:>9.6}s]", f, ts.as_secs_f64()))
-            ));
+        match (self.frame, self.timestamp) {
+            (Some(f), Some(ts)) => {
+                out.push_str(&format!(
+                    "{} ",
+                    dim_style.apply_to(format!("#{:<6} [{:>9.6}s]", f, ts.as_secs_f64()))
+                ));
+            }
+            (Some(f), None) => {
+                out.push_str(&format!("{} ", dim_style.apply_to(format!("#{:<6}", f))));
+            }
+            (None, Some(ts)) => {
+                out.push_str(&format!(
+                    "{} ",
+                    dim_style.apply_to(format!("[{:>9.6}s]", ts.as_secs_f64()))
+                ));
+            }
+            (None, None) => {}
         }
 
         out.push_str(&self.detail);
@@ -207,7 +212,6 @@ impl LineComponent for EventLine {
         self.render_without_repeat()
     }
 
-    #[allow(dead_code)]
     fn line_count(&self, term_width: usize) -> usize {
         let text = self.render_without_repeat();
         count_lines_with_wrapping(&text, term_width)
@@ -253,17 +257,7 @@ impl DetailLine {
         };
         let line = format!("{} {}", prefix, content);
 
-        // If line wraps, we need to account for the prefix width in wrapping calculations
-        let prefix_width = measure_text_width(&format!("         {}", branch));
-        let content_width = measure_text_width(&self.content);
-        let total_width = prefix_width + 1 + content_width;
-
-        if term_width > 0 && total_width > term_width {
-            // Line will wrap; keep the formatting intact
-            line
-        } else {
-            line
-        }
+        line
     }
 }
 
@@ -273,7 +267,6 @@ impl LineComponent for DetailLine {
         self.render_with_branch(true, true, term_width)
     }
 
-    #[allow(dead_code)]
     fn line_count(&self, term_width: usize) -> usize {
         let rendered = self.render(term_width);
         count_lines_with_wrapping(&rendered, term_width)
@@ -732,22 +725,22 @@ impl ErrorFormatter {
         let event_key = block.event.signature_key();
 
         // Check if this is a repeat of the last event
-        if let Some(ref last_key) = self.last_event_key {
-            if last_key == &event_key {
-                // Same event repeating — increment counter.
-                self.repeat_count += 1;
-                self.repeat_last_frame = block.event.frame.unwrap_or(0);
-                self.repeat_last_ts = block.event.timestamp.unwrap_or(Duration::ZERO);
+        if let Some(ref last_key) = self.last_event_key
+            && last_key == &event_key
+        {
+            // Same event repeating — increment counter.
+            self.repeat_count += 1;
+            self.repeat_last_frame = block.event.frame.unwrap_or(0);
+            self.repeat_last_ts = block.event.timestamp.unwrap_or(Duration::ZERO);
 
-                // Throttle: only overwrite the terminal at most once per `overwrite_interval`
-                // repeats to avoid flickering from excessive cursor movement.
-                let due = self.repeat_count - self.last_overwrite_at >= self.overwrite_interval;
-                if due {
-                    self.overwrite_repeat_block();
-                    self.last_overwrite_at = self.repeat_count;
-                }
-                return;
+            // Throttle: only overwrite the terminal at most once per `overwrite_interval`
+            // repeats to avoid flickering from excessive cursor movement.
+            let due = self.repeat_count - self.last_overwrite_at >= self.overwrite_interval;
+            if due {
+                self.overwrite_repeat_block();
+                self.last_overwrite_at = self.repeat_count;
             }
+            return;
         }
 
         // Different event — output new block.
@@ -771,7 +764,7 @@ impl ErrorFormatter {
         let lines = block.render_block(term_width);
         let line_count = lines.len();
         for line in lines {
-            println!("{}", line);
+            let _ = self.term.write_line(&line);
         }
 
         self.last_block = Some(block);
@@ -799,27 +792,15 @@ impl ErrorFormatter {
 
             let detail_lines_total: usize = self.last_detail_lines.iter().sum();
 
-            if detail_lines_total == 0 {
-                // Simple case: no details — use LineComponent::rewrite_in_place.
-                let new_event_lines =
-                    block
-                        .event
-                        .rewrite_in_place(&repeated_event_line, &self.term, 0, term_width);
-                self.last_event_lines = new_event_lines;
-                self.last_printed_lines = new_event_lines;
-            } else {
-                // Details exist below the event.  Move the cursor above the event,
-                // rewrite only the event lines, then advance past the details so
-                // the cursor ends up back at the bottom.  Details are NOT reprinted.
-                let new_event_lines = block.event.rewrite_in_place(
-                    &repeated_event_line,
-                    &self.term,
-                    detail_lines_total,
-                    term_width,
-                );
-                self.last_event_lines = new_event_lines;
-                self.last_printed_lines = new_event_lines + detail_lines_total;
-            }
+            // Use the event line's rewrite_in_place API to update just the event line, leaving detail lines untouched.
+            let new_event_lines = block.event.rewrite_in_place(
+                &repeated_event_line,
+                &self.term,
+                detail_lines_total,
+                term_width,
+            );
+            self.last_event_lines = new_event_lines;
+            self.last_printed_lines = new_event_lines + detail_lines_total;
 
             let _ = self.term.flush();
         }
@@ -839,11 +820,8 @@ impl ErrorFormatter {
                     let detail_count = block.details.len();
 
                     // `lines_below` for this detail = sum of line counts for all details after it.
-                    let lines_below_detail: usize = self
-                        .last_detail_lines
-                        .iter()
-                        .skip(idx + 1)
-                        .sum();
+                    let lines_below_detail: usize =
+                        self.last_detail_lines.iter().skip(idx + 1).sum();
 
                     // Determine the rendered form of the updated detail (with correct branch).
                     let is_last = idx + 1 == detail_count;
@@ -1071,5 +1049,30 @@ mod tests {
         esm2.packet_number = 99;
         let not_found = ErrorFormatter::find_correlation_for_esm(&esm2, &[corr]);
         assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_event_line_render_without_repeat_with_partial_metadata() {
+        let frame_only = EventLine::new("TEST", "detail", Some(42), None, Color::Blue);
+        let frame_only_rendered = frame_only.render_without_repeat();
+        assert!(
+            frame_only_rendered.contains("#42"),
+            "got: {}",
+            frame_only_rendered
+        );
+
+        let ts_only = EventLine::new(
+            "TEST",
+            "detail",
+            None,
+            Some(Duration::from_millis(1250)),
+            Color::Blue,
+        );
+        let ts_only_rendered = ts_only.render_without_repeat();
+        assert!(
+            ts_only_rendered.contains("1.250000s"),
+            "got: {}",
+            ts_only_rendered
+        );
     }
 }
