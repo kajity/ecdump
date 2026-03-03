@@ -10,9 +10,9 @@ use ecdump::subdevice::SubdeviceIdentifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerboseLevel {
-    Nothing = 0,  // 何も出力しない
-    Normal = 1,   // 基本的なエラー情報
-    Detailed = 2, // 詳細なエラー情報
+    Nothing = 0,
+    Normal = 1,
+    Detailed = 2,
 }
 
 impl VerboseLevel {
@@ -25,20 +25,261 @@ impl VerboseLevel {
     }
 }
 
-/// Signature of the last displayed event, used for consecutive-dedup.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct EventSignature {
-    /// A string key that identifies "the same kind of event"
+// ─── Rendered Output ───
+
+#[derive(Debug, Clone)]
+struct RenderedLine {
+    text: String,
+    line_count: usize,
+}
+
+impl RenderedLine {
+    fn new(text: String, term_width: usize) -> Self {
+        let line_count = count_lines_with_wrapping(&text, term_width);
+        Self { text, line_count }
+    }
+
+    fn write_to(&self, term: &Term) {
+        let _ = term.write_line(&self.text);
+    }
+
+    fn rewrite_in_place(&self, previous_line_count: usize, term: &Term, lines_below: usize) {
+        let total_up = lines_below + previous_line_count;
+        if total_up > 0 {
+            let _ = term.move_cursor_up(total_up);
+        }
+        let clear_count = previous_line_count.max(self.line_count);
+        for i in 0..clear_count {
+            let _ = term.clear_line();
+            if i + 1 < clear_count {
+                let _ = term.move_cursor_down(1);
+            }
+        }
+        if clear_count > 1 {
+            let _ = term.move_cursor_up(clear_count - 1);
+        }
+
+        self.write_to(term);
+        if lines_below > 0 {
+            let _ = term.move_cursor_down(lines_below);
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RenderedBlock {
+    event: RenderedLine,
+    details: Vec<RenderedLine>,
+}
+
+impl RenderedBlock {
+    fn write_to(&self, term: &Term) {
+        self.event.write_to(term);
+        for detail in &self.details {
+            detail.write_to(term);
+        }
+    }
+
+    fn detail_lines_total(&self) -> usize {
+        self.details.iter().map(|detail| detail.line_count).sum()
+    }
+
+    fn detail_lines_below(&self, idx: usize) -> usize {
+        self.details
+            .iter()
+            .skip(idx + 1)
+            .map(|detail| detail.line_count)
+            .sum()
+    }
+}
+
+/// An event line component (tagged line with frame/timestamp info).
+#[derive(Debug, Clone)]
+struct EventLine {
+    tag: String,
+    tag_color: Color,
+    detail: String,
+    frame: Option<u64>,
+    timestamp: Option<Duration>,
+}
+
+impl EventLine {
+    fn new(
+        tag: &str,
+        detail: &str,
+        frame: Option<u64>,
+        timestamp: Option<Duration>,
+        tag_color: Color,
+    ) -> Self {
+        EventLine {
+            tag: tag.to_string(),
+            tag_color,
+            detail: detail.to_string(),
+            frame,
+            timestamp,
+        }
+    }
+
+    fn render(&self, term_width: usize) -> RenderedLine {
+        RenderedLine::new(self.render_without_repeat(), term_width)
+    }
+
+    fn render_repeated(
+        &self,
+        term_width: usize,
+        repeat_count: usize,
+        first_frame: u64,
+        last_frame: u64,
+        first_ts: Duration,
+        last_ts: Duration,
+    ) -> RenderedLine {
+        let mut base = self.render_without_repeat();
+        let repeat_suffix = format!(
+            " (×{}, #{}-#{}, {:.3}s-{:.3}s)",
+            repeat_count,
+            first_frame,
+            last_frame,
+            first_ts.as_secs_f64(),
+            last_ts.as_secs_f64()
+        );
+        base.push_str(&style(&repeat_suffix).color256(244).to_string());
+        RenderedLine::new(base, term_width)
+    }
+
+    /// Render without any repeat summary.
+    fn render_without_repeat(&self) -> String {
+        let tag_style = Style::new().fg(self.tag_color).bold();
+        let dim_style = Style::new().color256(244);
+
+        let mut out = String::new();
+        out.push_str(&format!("  {} ", tag_style.apply_to("▌")));
+        out.push_str(&format!(
+            "{}",
+            tag_style.apply_to(format!("{:<8}", self.tag))
+        ));
+        out.push(' ');
+
+        match (self.frame, self.timestamp) {
+            (Some(f), Some(ts)) => {
+                out.push_str(&format!(
+                    "{} ",
+                    dim_style.apply_to(format!("#{:<6} [{:>9.6}s]", f, ts.as_secs_f64()))
+                ));
+            }
+            (Some(f), None) => {
+                out.push_str(&format!("{} ", dim_style.apply_to(format!("#{:<6}", f))));
+            }
+            (None, Some(ts)) => {
+                out.push_str(&format!(
+                    "{} ",
+                    dim_style.apply_to(format!("[{:>9.6}s]", ts.as_secs_f64()))
+                ));
+            }
+            (None, None) => {}
+        }
+
+        out.push_str(&self.detail);
+        out
+    }
+}
+
+/// A detail line component (child of an event, with tree branch).
+#[derive(Debug, Clone)]
+struct DetailLine {
+    content: String,
+    dimmed: bool,
+}
+
+impl DetailLine {
+    fn new(content: String, dimmed: bool) -> Self {
+        DetailLine { content, dimmed }
+    }
+
+    fn update_content(&mut self, new_content: String) {
+        self.content = new_content;
+    }
+
+    fn render_with_branch(&self, is_last: bool, is_only: bool, term_width: usize) -> RenderedLine {
+        let branch = if is_only || is_last {
+            "└─"
+        } else {
+            "├─"
+        };
+        let prefix = style(format!("         {}", branch))
+            .color256(244)
+            .to_string();
+        let content = if self.dimmed {
+            style(&self.content).color256(244).to_string()
+        } else {
+            self.content.clone()
+        };
+        RenderedLine::new(format!("{} {}", prefix, content), term_width)
+    }
+}
+
+/// An output block: event line + optional detail lines (tree structure).
+#[derive(Debug, Clone)]
+struct OutputBlock {
     key: String,
-    /// The formatted single-line message (without repeat count)
-    base_message: String,
+    event: EventLine,
+    details: Vec<DetailLine>,
+}
+
+impl OutputBlock {
+    fn new(key: String, event: EventLine) -> Self {
+        OutputBlock {
+            key,
+            event,
+            details: Vec::new(),
+        }
+    }
+
+    fn add_detail(&mut self, detail: DetailLine) {
+        self.details.push(detail);
+    }
+
+    fn render(&self, term_width: usize) -> RenderedBlock {
+        let mut details = Vec::with_capacity(self.details.len());
+
+        let detail_count = self.details.len();
+        for (idx, detail) in self.details.iter().enumerate() {
+            let is_last = idx + 1 == detail_count;
+            let is_only = detail_count == 1;
+            details.push(detail.render_with_branch(is_last, is_only, term_width));
+        }
+
+        RenderedBlock {
+            event: self.event.render(term_width),
+            details,
+        }
+    }
+}
+
+/// Calculate how many terminal lines a string occupies with wrapping.
+fn count_lines_with_wrapping(text: &str, term_width: usize) -> usize {
+    if term_width == 0 {
+        return 1;
+    }
+
+    text.split('\n')
+        .map(|line| {
+            let visible_width = measure_text_width(line);
+            if visible_width == 0 {
+                1
+            } else {
+                (visible_width + term_width - 1) / term_width
+            }
+        })
+        .sum()
 }
 
 pub struct ErrorFormatter {
     verbose: VerboseLevel,
     term: Term,
-    /// The signature of the most recently displayed event line.
-    last_event: Option<EventSignature>,
+    /// The last displayed output block (event + detail lines).
+    last_block: Option<OutputBlock>,
+    /// Cached rendered form of the last displayed block.
+    last_rendered_block: Option<RenderedBlock>,
     /// How many consecutive times the current event has been displayed.
     repeat_count: usize,
     /// Frame number of the first occurrence of the current repeated event.
@@ -49,18 +290,18 @@ pub struct ErrorFormatter {
     repeat_last_frame: u64,
     /// Timestamp of the most recent occurrence.
     repeat_last_ts: Duration,
-    /// Number of terminal lines occupied by the last printed repeat/event line.
-    last_printed_lines: usize,
+    /// repeat_count value at which we last performed an overwrite (for throttling).
+    last_overwrite_at: usize,
+    /// Minimum number of new repeats required before we perform an overwrite.
+    overwrite_interval: usize,
     /// Whether the last emitted event was an ESM error (any type).
     last_esm_error: bool,
     /// The subdevice identifier for the last ESM error.
     last_esm_subdevice: Option<SubdeviceIdentifier>,
     /// The AL Status Code currently displayed for the last ESM error (if any).
     last_esm_al_status_code: Option<u16>,
-    /// Number of terminal lines occupied by the AL Status Code sub-line (0 if not printed).
-    last_al_status_lines: usize,
-    /// Total number of extra sub-lines printed after the last ESM event (correlation + diagnosis + al_status).
-    last_esm_sub_lines: usize,
+    /// Index of the AL Status Code detail line in the last block.
+    last_al_status_detail_index: Option<usize>,
 }
 
 impl ErrorFormatter {
@@ -68,18 +309,19 @@ impl ErrorFormatter {
         ErrorFormatter {
             verbose: VerboseLevel::from_u8(verbose_level),
             term: Term::stdout(),
-            last_event: None,
+            last_block: None,
+            last_rendered_block: None,
             repeat_count: 0,
             repeat_first_frame: 0,
             repeat_first_ts: Duration::ZERO,
             repeat_last_frame: 0,
             repeat_last_ts: Duration::ZERO,
-            last_printed_lines: 0,
+            last_overwrite_at: 0,
+            overwrite_interval: 10,
             last_esm_error: false,
             last_esm_subdevice: None,
             last_esm_al_status_code: None,
-            last_al_status_lines: 0,
-            last_esm_sub_lines: 0,
+            last_al_status_detail_index: None,
         }
     }
 
@@ -99,7 +341,7 @@ impl ErrorFormatter {
                 if already_shown == Some(update.al_status_code) {
                     continue; // No change
                 }
-                self.rewrite_al_status_code_line(update.al_status_code);
+                self.rewrite_al_status_code_detail(update.al_status_code);
             }
         }
     }
@@ -166,14 +408,14 @@ impl ErrorFormatter {
     ) {
         let detail = error.to_string();
         let key = format!("datagram:{}", detail);
-        let msg = Self::format_tagged_line(
+        let event = EventLine::new(
             "FRAME",
             &detail,
             Some(packet_number),
             Some(timestamp),
             Color::Red,
         );
-        self.emit_event(key, msg, packet_number, timestamp);
+        self.emit_output_block(OutputBlock::new(key, event));
     }
 
     fn emit_device_error(&mut self, error: &ECDeviceError, correlations: &[ErrorCorrelation]) {
@@ -181,11 +423,9 @@ impl ErrorFormatter {
         // (it will be re-set below if this error is itself an ESM error)
         self.clear_esm_tracking();
 
-        let (key, msg, frame, ts, corr, esm_info): (
+        let (key, event, corr, esm_info): (
             String,
-            String,
-            u64,
-            Duration,
+            EventLine,
             Option<WkcErrorDetail>,
             Option<(SubdeviceIdentifier, Option<u16>)>,
         ) = match error {
@@ -201,14 +441,14 @@ impl ErrorFormatter {
                     command.as_str(),
                     address
                 );
-                let msg = Self::format_tagged_line(
+                let event = EventLine::new(
                     "ADDR",
                     &detail,
                     Some(*packet_number),
                     Some(*timestamp),
                     Color::Yellow,
                 );
-                (key, msg, *packet_number, *timestamp, None, None)
+                (key, event, None, None)
             }
             ECDeviceError::InvalidConfiguredAddress {
                 packet_number,
@@ -218,14 +458,14 @@ impl ErrorFormatter {
             } => {
                 let key = format!("addr:config:{:#06x}:{}", address, command.as_str());
                 let detail = format!("{} configured {:#06x} not found", command.as_str(), address);
-                let msg = Self::format_tagged_line(
+                let event = EventLine::new(
                     "ADDR",
                     &detail,
                     Some(*packet_number),
                     Some(*timestamp),
                     Color::Yellow,
                 );
-                (key, msg, *packet_number, *timestamp, None, None)
+                (key, event, None, None)
             }
             ECDeviceError::InvalidWkc(d) => {
                 let sub = d
@@ -255,19 +495,17 @@ impl ErrorFormatter {
                     d.actual,
                     cause,
                 );
-                let msg = Self::format_tagged_line(
+                let event = EventLine::new(
                     "WKC",
                     &detail,
                     Some(d.packet_number),
                     Some(d.timestamp),
                     Color::Red,
                 );
-                (key, msg, d.packet_number, d.timestamp, None, None)
+                (key, event, None, None)
             }
             ECDeviceError::ESMError(d) => {
                 let esm_short = Self::esm_error_short(&d.error);
-                // Include the correlated WKC error in the dedup key so that
-                // the same ESM+WKC pair collapses together.
                 let corr = Self::find_correlation_for_esm(d, correlations);
                 let key = format!(
                     "esm:{}:{:?}",
@@ -275,26 +513,55 @@ impl ErrorFormatter {
                     std::mem::discriminant(&d.error)
                 );
                 let detail = format!("[{}] {}; {}", d.subdevice_id, d.command.as_str(), esm_short);
-                let msg = Self::format_tagged_line(
+                let event = EventLine::new(
                     "ESM",
                     &detail,
                     Some(d.packet_number),
                     Some(d.timestamp),
                     Color::Magenta,
                 );
-                // Track ESM error info for AL Status Code updates
                 let esm_info = Some((d.subdevice_id, d.al_status_code));
 
-                (key, msg, d.packet_number, d.timestamp, corr, esm_info)
+                (key, event, corr, esm_info)
             }
         };
+        self.emit_output_block_with_details(OutputBlock::new(key, event), corr, esm_info, error);
+    }
 
-        self.emit_event(key, msg, frame, ts);
+    fn emit_state_transition(&mut self, tr: &StateTransition) {
+        let key = format!("transition:{}:{}:{}", tr.subdevice_id, tr.from, tr.to);
 
-        // Print sub-lines only for the first occurrence (not during repeats)
-        let mut sub_lines_count: usize = 0;
-        if self.repeat_count <= 1 {
-            // Show correlated WKC error as a sub-line (same format as WKC error display)
+        let arrow = if tr.to > tr.from {
+            style("->").green().to_string()
+        } else {
+            style("->").red().to_string()
+        };
+
+        let detail = format!("[{}] {} {} {}", tr.subdevice_id, tr.from, arrow, tr.to);
+        let event = EventLine::new(
+            "STATE",
+            &detail,
+            Some(tr.packet_number),
+            Some(tr.timestamp),
+            Color::Cyan,
+        );
+        self.emit_output_block(OutputBlock::new(key, event));
+    }
+
+    // ─── Core component logic ───
+
+    fn emit_output_block(&mut self, block: OutputBlock) {
+        self.emit_output_block_internal(block);
+    }
+
+    fn emit_output_block_with_details(
+        &mut self,
+        mut block: OutputBlock,
+        corr: Option<WkcErrorDetail>,
+        esm_info: Option<(SubdeviceIdentifier, Option<u16>)>,
+        error: &ECDeviceError,
+    ) {
+        if !self.is_same_event(&block) {
             if let Some(ref c) = corr {
                 let sub = c
                     .subdevice_id
@@ -309,173 +576,134 @@ impl ErrorFormatter {
                     c.actual,
                     cause,
                 );
-                let wkc_sub_line = Self::format_tagged_line(
+                let wkc_line = EventLine::new(
                     "WKC",
                     &wkc_detail,
                     Some(c.packet_number),
                     Some(c.timestamp),
                     Color::Red,
                 );
-                println!("{} {}", style("         └─").color256(244), wkc_sub_line);
-                sub_lines_count +=
-                    self.count_terminal_lines(&format!("         └─ {}", wkc_sub_line));
+                block.add_detail(DetailLine::new(wkc_line.render_without_repeat(), false));
             }
 
-            // In Detailed mode, also print the diagnosis on a separate line
             if self.verbose >= VerboseLevel::Detailed {
-                let diagnosis = error.diagnosis();
-                let diag_line = format!("         └─ {}", diagnosis);
-                sub_lines_count += self.count_terminal_lines(&diag_line);
-                println!("{}", style(&diag_line).color256(244));
+                block.add_detail(DetailLine::new(error.diagnosis(), true));
             }
 
-            // For ESM errors, print AL Status Code sub-line if available
-            if self.verbose >= VerboseLevel::Detailed
-                && let Some((subdevice_id, al_code)) = esm_info
-            {
-                self.last_esm_error = true;
-                self.last_esm_subdevice = Some(subdevice_id);
-                self.last_esm_al_status_code = None;
-                self.last_al_status_lines = 0;
-                self.last_esm_sub_lines = sub_lines_count;
+            if self.verbose >= VerboseLevel::Detailed {
+                if let Some((subdevice_id, al_code)) = esm_info {
+                    self.last_esm_error = true;
+                    self.last_esm_subdevice = Some(subdevice_id);
+                    self.last_esm_al_status_code = al_code;
+                    self.last_al_status_detail_index = Some(block.details.len());
 
-                if let Some(code) = al_code {
-                    let al_line = format!(
-                        "         └─ AL Status Code: {}",
-                        format_al_status_code(code)
-                    );
-                    let lines = self.count_terminal_lines(&al_line);
-                    println!("{}", style(&al_line).color256(244));
-                    self.last_esm_al_status_code = Some(code);
-                    self.last_al_status_lines = lines;
-                    self.last_esm_sub_lines += lines;
+                    let al_text = match al_code {
+                        Some(code) => format!("AL Status Code: {}", format_al_status_code(code)),
+                        None => "AL Status Code: (pending)".to_string(),
+                    };
+                    block.add_detail(DetailLine::new(al_text, true));
                 }
             }
         }
+
+        self.emit_output_block_internal(block);
     }
 
-    /// Rewrite (or append) the AL Status Code sub-line for the last ESM error.
-    fn rewrite_al_status_code_line(&mut self, code: u16) {
-        let al_line = format!(
-            "         └─ AL Status Code: {}",
-            format_al_status_code(code)
-        );
-        let new_lines = self.count_terminal_lines(&al_line);
-
-        if self.last_al_status_lines > 0 {
-            // There is an existing AL Status Code line — overwrite it
-            let _ = self.term.clear_last_lines(self.last_al_status_lines);
-            println!("{}", style(&al_line).color256(244));
-            let _ = self.term.flush();
-            // Update the line count difference in sub_lines
-            self.last_esm_sub_lines =
-                self.last_esm_sub_lines - self.last_al_status_lines + new_lines;
-        } else {
-            // No existing AL Status Code line — append a new one
-            println!("{}", style(&al_line).color256(244));
-            let _ = self.term.flush();
-            self.last_esm_sub_lines += new_lines;
-        }
-
-        self.last_esm_al_status_code = Some(code);
-        self.last_al_status_lines = new_lines;
-        // Also update total printed lines to include the sub-lines
-        self.last_printed_lines += if self.last_al_status_lines > 0 {
-            0
-        } else {
-            new_lines
-        };
-    }
-
-    /// Clear ESM error tracking state.
-    fn clear_esm_tracking(&mut self) {
-        self.last_esm_error = false;
-        self.last_esm_subdevice = None;
-        self.last_esm_al_status_code = None;
-        self.last_al_status_lines = 0;
-        self.last_esm_sub_lines = 0;
-    }
-
-    fn emit_state_transition(&mut self, tr: &StateTransition) {
-        let key = format!("transition:{}:{}:{}", tr.subdevice_id, tr.from, tr.to);
-
-        let arrow = if tr.to > tr.from {
-            style("->").green().to_string()
-        } else {
-            style("->").red().to_string()
-        };
-
-        let detail = format!("[{}] {} {} {}", tr.subdevice_id, tr.from, arrow, tr.to);
-        let msg = Self::format_tagged_line(
-            "STATE",
-            &detail,
-            Some(tr.packet_number),
-            Some(tr.timestamp),
-            Color::Cyan,
-        );
-        self.emit_event(key, msg, tr.packet_number, tr.timestamp);
-    }
-
-    /// Find a correlation that matches this ESM error (same subdevice, same ESM error).
-    fn find_correlation_for_esm(
-        esm: &crate::analyzer::ESMErrorDetail,
-        correlations: &[ErrorCorrelation],
-    ) -> Option<WkcErrorDetail> {
-        correlations
-            .iter()
-            .find(|c| {
-                c.esm_error.subdevice_id == esm.subdevice_id
-                    && c.esm_error.packet_number == esm.packet_number
-            })
-            .map(|c| c.wkc_error)
-    }
-
-    // ─── Core logic ───
-
-    /// Emit a single event. If the same event key was just displayed, overwrite
-    /// the last line with an updated repeat count instead of printing a new line.
-    fn emit_event(&mut self, key: String, base_message: String, frame: u64, ts: Duration) {
-        let sig = EventSignature {
-            key,
-            base_message: base_message.clone(),
-        };
-
-        if let Some(ref last) = self.last_event {
-            if last.key == sig.key {
-                // Same event repeating — increment count and overwrite last line
-                self.repeat_count += 1;
-                self.repeat_last_frame = frame;
-                self.repeat_last_ts = ts;
-                self.overwrite_repeat_line(sig);
-                return;
-            }
-        }
-
-        // Different event — start a new line
-        // (The previous repeat line, if any, is already finalized on stdout)
-        self.last_event = Some(sig);
-        self.repeat_count = 1;
-        self.repeat_first_frame = frame;
-        self.repeat_first_ts = ts;
-        self.repeat_last_frame = frame;
-        self.repeat_last_ts = ts;
-        self.last_printed_lines = 0;
-
-        let lines = self.count_terminal_lines(&base_message);
-        println!("{}", base_message);
-        self.last_printed_lines = lines;
-    }
-
-    /// Calculate how many terminal lines a string occupies when printed,
-    /// accounting for line wrapping at the terminal width boundary.
-    fn count_terminal_lines(&self, text: &str) -> usize {
+    fn emit_output_block_internal(&mut self, block: OutputBlock) {
         let term_width = self.terminal_width();
-        let visible_width = measure_text_width(text);
-        if visible_width == 0 || term_width == 0 {
-            return 1;
+        if self.is_same_event(&block) {
+            self.repeat_count += 1;
+            self.repeat_last_frame = block.event.frame.unwrap_or(0);
+            self.repeat_last_ts = block.event.timestamp.unwrap_or(Duration::ZERO);
+
+            let due = self.repeat_count - self.last_overwrite_at >= self.overwrite_interval;
+            if due {
+                self.overwrite_repeat_block();
+                self.last_overwrite_at = self.repeat_count;
+            }
+            return;
         }
-        // Ceiling division: how many rows the text spans
-        (visible_width + term_width - 1) / term_width
+
+        self.repeat_count = 1;
+        self.last_overwrite_at = 0;
+        self.repeat_first_frame = block.event.frame.unwrap_or(0);
+        self.repeat_first_ts = block.event.timestamp.unwrap_or(Duration::ZERO);
+        self.repeat_last_frame = self.repeat_first_frame;
+        self.repeat_last_ts = self.repeat_first_ts;
+
+        let rendered = block.render(term_width);
+        rendered.write_to(&self.term);
+        self.last_block = Some(block);
+        self.last_rendered_block = Some(rendered);
+    }
+
+    fn overwrite_repeat_block(&mut self) -> Option<()> {
+        let term_width = self.terminal_width();
+        let block = self.last_block.as_ref()?;
+        let rendered_block = self.last_rendered_block.as_mut()?;
+
+        let rendered_event = block.event.render_repeated(
+            term_width,
+            self.repeat_count,
+            self.repeat_first_frame,
+            self.repeat_last_frame,
+            self.repeat_first_ts,
+            self.repeat_last_ts,
+        );
+
+        let old_event_line_count = rendered_block.event.line_count;
+        let detail_lines_total = rendered_block.detail_lines_total();
+
+        if old_event_line_count == rendered_event.line_count {
+            // If the event line didn't change height, we can just rewrite it in place
+            rendered_event.rewrite_in_place(old_event_line_count, &self.term, detail_lines_total);
+            rendered_block.event = rendered_event;
+        } else {
+            // Otherwise, we need to rewrite the entire block to avoid messing up the detail lines
+            let _ = self
+                .term
+                .move_cursor_up(old_event_line_count + detail_lines_total);
+            rendered_block.event = rendered_event;
+            rendered_block.write_to(&self.term);
+        }
+
+        let _ = self.term.flush();
+        Some(())
+    }
+
+    fn rewrite_al_status_code_detail(&mut self, code: u16) {
+        if !self.last_esm_error {
+            return;
+        }
+
+        let Some(idx) = self.last_al_status_detail_index else {
+            return;
+        };
+        let term_width = self.terminal_width();
+        let Some(block) = self.last_block.as_mut() else {
+            return;
+        };
+        let Some(rendered_block) = self.last_rendered_block.as_mut() else {
+            return;
+        };
+        if idx >= block.details.len() || idx >= rendered_block.details.len() {
+            return;
+        }
+
+        let al_text = format!("AL Status Code: {}", format_al_status_code(code));
+        let detail_count = block.details.len();
+        let is_last = idx + 1 == detail_count;
+        let is_only = detail_count == 1;
+
+        block.details[idx].update_content(al_text);
+        let rendered_detail = block.details[idx].render_with_branch(is_last, is_only, term_width);
+        let lines_below = rendered_block.detail_lines_below(idx);
+        let previous_line_count = rendered_block.details[idx].line_count;
+        rendered_detail.rewrite_in_place(previous_line_count, &self.term, lines_below);
+        rendered_block.details[idx] = rendered_detail;
+
+        let _ = self.term.flush();
+        self.last_esm_al_status_code = Some(code);
     }
 
     /// Get the current terminal width, with a safe fallback.
@@ -484,91 +712,27 @@ impl ErrorFormatter {
         cols as usize
     }
 
-    /// Overwrite the last line on stdout with a summary showing the repeat count.
-    fn overwrite_repeat_line(&mut self, base: EventSignature) {
-        // let base = match self.last_event {
-        //     Some(ref e) => e.base_message.clone(),
-        //     None => return,
-        // };
-        let base = base.base_message;
-
-        // Build the repeat summary line
-        let repeat_suffix = format!(
-            " (×{}, #{}-#{}, {:.3}s-{:.3}s)",
-            self.repeat_count,
-            self.repeat_first_frame,
-            self.repeat_last_frame,
-            self.repeat_first_ts.as_secs_f64(),
-            self.repeat_last_ts.as_secs_f64(),
-        );
-
-        let full_line = format!("{}{}", base, style(&repeat_suffix).color256(244));
-
-        // Calculate how many terminal lines the *previous* output occupied
-        let lines_to_clear = if self.repeat_count == 2 {
-            0
-        } else {
-            self.last_printed_lines
-        };
-
-        // Clear the previous output (handles wrapped lines correctly)
-        if lines_to_clear > 0 {
-            let _ = self.term.clear_last_lines(lines_to_clear);
-        }
-
-        // Calculate how many lines the new output will occupy
-        let new_lines = self.count_terminal_lines(&full_line);
-
-        println!("{}", full_line);
-        let _ = self.term.flush();
-        self.last_printed_lines = new_lines;
-    }
-
     /// Flush any pending repeat state. Called before printing non-event output.
     fn flush_repeat(&mut self) {
-        self.last_event = None;
+        if self.repeat_count > 1 && self.repeat_count != self.last_overwrite_at {
+            self.overwrite_repeat_block();
+        }
+        self.last_block = None;
+        self.last_rendered_block = None;
         self.repeat_count = 0;
-        self.last_printed_lines = 0;
+        self.last_overwrite_at = 0;
         self.clear_esm_tracking();
     }
 
-    // ─── Formatting helpers ───
-
-    /// Format a tagged error line in the pop style:
-    ///   ▌ TAG  #frame [timestamp] detail
-    fn format_tagged_line(
-        tag: &str,
-        detail: &str,
-        frame: Option<u64>,
-        timestamp: Option<Duration>,
-        tag_color: Color,
-    ) -> String {
-        let tag_style = Style::new().fg(tag_color).bold();
-        let dim_style = Style::new().color256(244); // dark grey
-
-        let mut out = String::new();
-
-        // "  ▌ "
-        out.push_str(&format!("  {} ", tag_style.apply_to("▌")));
-
-        // "TAG     " (left-padded to 8 chars)
-        out.push_str(&format!("{}", tag_style.apply_to(format!("{:<8}", tag))));
-
-        // "#frame  [timestamp] " (dim)
-        if let (Some(f), Some(ts)) = (frame, timestamp) {
-            out.push_str(&format!(
-                "{} ",
-                dim_style.apply_to(format!("#{:<6} [{:>9.6}s]", f, ts.as_secs_f64()))
-            ));
-        }
-
-        // detail text (unstyled)
-        out.push_str(detail);
-
-        out
+    /// Clear ESM error tracking state.
+    fn clear_esm_tracking(&mut self) {
+        self.last_esm_error = false;
+        self.last_esm_subdevice = None;
+        self.last_esm_al_status_code = None;
+        self.last_al_status_detail_index = None;
     }
 
-    // ─── Visual helpers ───
+    // ─── Formatting helpers ───
 
     /// Format an interface info line in the same tagged-line style as errors.
     pub fn format_interface_line(
@@ -579,7 +743,8 @@ impl ErrorFormatter {
     ) -> String {
         let suffix = if is_default { ", default" } else { "" };
         let detail = format!("{} [{}{}]", description, oper_state, suffix);
-        Self::format_tagged_line(name, &detail, None, None, Color::Green)
+        let event = EventLine::new(name, &detail, None, None, Color::Green);
+        event.render_without_repeat()
     }
 
     fn print_heavy_separator(&self) {
@@ -587,6 +752,11 @@ impl ErrorFormatter {
     }
 
     // ─── Data helpers ───
+    fn is_same_event(&self, block: &OutputBlock) -> bool {
+        self.last_block
+            .as_ref()
+            .map_or(false, |lb| lb.key == block.key)
+    }
 
     fn wkc_cause_short(expected: u16, actual: u16) -> &'static str {
         if actual == 0 {
@@ -624,6 +794,20 @@ impl ErrorFormatter {
                 format!("-> {} failed @{}{}", requested, current, flag)
             }
         }
+    }
+
+    /// Find a correlation that matches this ESM error (same subdevice, same ESM error).
+    fn find_correlation_for_esm(
+        esm: &crate::analyzer::ESMErrorDetail,
+        correlations: &[ErrorCorrelation],
+    ) -> Option<WkcErrorDetail> {
+        correlations
+            .iter()
+            .find(|c| {
+                c.esm_error.subdevice_id == esm.subdevice_id
+                    && c.esm_error.packet_number == esm.packet_number
+            })
+            .map(|c| c.wkc_error)
     }
 }
 
@@ -671,28 +855,6 @@ mod tests {
         let s2 = ErrorFormatter::esm_error_short(&err2);
         assert!(s2.contains("failed"), "got: {}", s2);
         assert!(!s2.contains("+err"), "got: {}", s2);
-    }
-
-    #[test]
-    fn test_format_tagged_line_with_frame() {
-        let line = ErrorFormatter::format_tagged_line(
-            "WKC",
-            "some detail",
-            Some(42),
-            Some(Duration::from_secs_f64(1.234)),
-            Color::Red,
-        );
-        assert!(line.contains("WKC"), "got: {}", line);
-        assert!(line.contains("some detail"), "got: {}", line);
-        assert!(line.contains("42"), "got: {}", line);
-    }
-
-    #[test]
-    fn test_format_tagged_line_without_frame() {
-        let line =
-            ErrorFormatter::format_tagged_line("DATAGRAM", "bad packet", None, None, Color::Red);
-        assert!(line.contains("DATAGRAM"), "got: {}", line);
-        assert!(line.contains("bad packet"), "got: {}", line);
     }
 
     #[test]
@@ -744,11 +906,27 @@ mod tests {
     }
 
     #[test]
-    fn test_count_terminal_lines() {
-        let formatter = ErrorFormatter::new(1);
-        // A short string should be 1 line
-        assert_eq!(formatter.count_terminal_lines("hello"), 1);
-        // Empty string should be 1 line
-        assert_eq!(formatter.count_terminal_lines(""), 1);
+    fn test_event_line_render_without_repeat_with_partial_metadata() {
+        let frame_only = EventLine::new("TEST", "detail", Some(42), None, Color::Blue);
+        let frame_only_rendered = frame_only.render_without_repeat();
+        assert!(
+            frame_only_rendered.contains("#42"),
+            "got: {}",
+            frame_only_rendered
+        );
+
+        let ts_only = EventLine::new(
+            "TEST",
+            "detail",
+            None,
+            Some(Duration::from_millis(1250)),
+            Color::Blue,
+        );
+        let ts_only_rendered = ts_only.render_without_repeat();
+        assert!(
+            ts_only_rendered.contains("1.250000s"),
+            "got: {}",
+            ts_only_rendered
+        );
     }
 }
