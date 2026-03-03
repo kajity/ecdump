@@ -48,6 +48,11 @@ sudo ecdump -i eth0 -vv
 ecdump -f capture.pcapng
 ```
 
+**Analyze file with interactive UI:**
+```bash
+ecdump -f capture.pcapng -I
+```
+
 **Capture live traffic and save it to a PCAP file for later analysis:**
 ```bash
 sudo ecdump -i eth0 -w output.pcap
@@ -60,5 +65,14 @@ sudo ecdump -i eth0 -w output.pcap
 - `-w, --write <FILE>`: Set the output file path to save captured packets.
 - `-D, --list-interfaces`: Show available network interfaces along with their operational state.
 - `-v, --verbose`: Enable verbose reporting. Can be used multiple times (e.g., `-vv`) for increased verbosity.
+- `-I, --interactive`: Enable interactive UI mode (available only with `--file`).
 - `-h, --help`: Print help information.
 - `-V, --version`: Print version information.
+
+### Interactive Mode Keys
+
+- `q`: Quit
+- `Space`: Play/Pause
+- `n`: Step one frame while paused
+- `j` / `k`: Move selection down/up
+- `g` / `G`: Jump to first/last event

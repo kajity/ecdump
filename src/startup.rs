@@ -6,6 +6,7 @@ pub struct Config {
     pub list_interfaces: bool,
     pub verbose: u8,
     pub debug: u8,
+    pub interactive: bool,
     pub pcap_source: PcapSource,
     pub output_file: Option<String>,
     pub time_sync: bool,
@@ -47,6 +48,10 @@ pub fn parse_args() -> Config {
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
 
+        /// Enable interactive mode (only applicable when reading from a file)
+        #[arg(short = 'I', long, default_value_t = false)]
+        interactive: bool,
+
         /// Synchronize packet timestamps with the current system time (only applicable when reading from a file)
         #[arg(short = 'T', default_value_t = false)]
         time_sync: bool,
@@ -65,6 +70,15 @@ pub fn parse_args() -> Config {
         .exit();
     }
 
+    if args.interactive && args.file.is_none() {
+        let mut cmd = Cli::command();
+        cmd.error(
+            ErrorKind::ArgumentConflict,
+            "Interactive mode requires --file",
+        )
+        .exit();
+    }
+
     let pcap_source = if let Some(file) = args.file {
         let is_pcapng = file.to_lowercase().ends_with(".pcapng");
         PcapSource::File(PcapFileConfig {
@@ -79,6 +93,7 @@ pub fn parse_args() -> Config {
         list_interfaces: args.list_interfaces,
         verbose: args.verbose,
         debug: args.debug,
+        interactive: args.interactive,
         pcap_source,
         output_file: args.write,
         time_sync: args.time_sync,

@@ -1,5 +1,7 @@
+mod analysis_event;
 mod analyzer;
 mod error_formatter;
+mod interactive;
 mod packet_source;
 mod startup;
 
@@ -32,6 +34,16 @@ fn main() -> Result<()> {
             );
         }
         return Ok(());
+    }
+
+    if config.interactive
+        && let PcapSource::File(file) = &config.pcap_source
+    {
+        return interactive::run_interactive_file_mode(
+            file,
+            config.output_file.as_deref(),
+            config.time_sync,
+        );
     }
 
     startup::set_up_logging(config.debug);
