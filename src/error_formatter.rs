@@ -25,98 +25,71 @@ impl VerboseLevel {
     }
 }
 
-// ─── Line Component System ───
+// ─── Rendered Output ───
 
-/// Trait for renderable line components.
-/// Each component manages its own content and rendering logic.
-#[allow(dead_code)]
-trait LineComponent {
-    /// Render the line with awareness of terminal width.
-    /// Returns the formatted string to be printed.
-    fn render(&self, term_width: usize) -> String;
+#[derive(Debug, Clone)]
+struct RenderedLine {
+    text: String,
+    line_count: usize,
+}
 
-    /// Calculate how many terminal lines this component occupies.
-    fn line_count(&self, term_width: usize) -> usize;
-
-    /// Get a unique identifier for this component (used for deduplication).
-    fn signature_key(&self) -> String;
-
-    /// Erase this component from the terminal.
-    ///
-    /// `lines_below` is the number of terminal lines that have been printed
-    /// *below* this component (i.e. detail lines sitting beneath an event line).
-    /// After the call the cursor is back at the original bottom position, but the
-    /// lines formerly occupied by this component are blank.
-    fn erase(&self, term: &Term, lines_below: usize, term_width: usize) {
-        let count = self.line_count(term_width);
-        let total_up = lines_below + count;
-        if total_up > 0 {
-            let _ = term.move_cursor_up(total_up);
-        }
-        // Clear each line that belongs to this component.
-        for i in 0..count {
-            let _ = term.clear_line();
-            if i + 1 < count {
-                let _ = term.move_cursor_down(1);
-            }
-        }
-        // Cursor is now at the first line of this component (cleared).
-        // Restore cursor to the original bottom position.
-        if lines_below + count > 1 {
-            let _ = term.move_cursor_down(lines_below + count - 1);
-        } else if count == 1 && lines_below == 0 {
-            // nothing to restore; cursor is already on the (blank) line we just cleared
-        }
+impl RenderedLine {
+    fn new(text: String, term_width: usize) -> Self {
+        let line_count = count_lines_with_wrapping(&text, term_width);
+        Self { text, line_count }
     }
 
-    /// Rewrite this component in-place with `new_rendered` text.
-    ///
-    /// Returns the new line count so the caller can update its tracking state.
-    /// The cursor is left at the original bottom position when this returns.
-    fn rewrite_in_place(
-        &self,
-        new_rendered: &str,
-        term: &Term,
-        lines_below: usize,
-        term_width: usize,
-    ) -> usize {
-        let old_count = self.line_count(term_width);
-        let new_count = count_lines_with_wrapping(new_rendered, term_width);
-        let total_up = lines_below + old_count;
+    fn write_to(&self, term: &Term) {
+        let _ = term.write_line(&self.text);
+    }
 
-        // Move cursor to the first line of this component.
+    fn rewrite_in_place(&self, previous_line_count: usize, term: &Term, lines_below: usize) {
+        let total_up = lines_below + previous_line_count;
         if total_up > 0 {
             let _ = term.move_cursor_up(total_up);
         }
-
-        // Clear the lines that the old rendering occupied
-        // (use whichever is larger so we never leave stale content).
-        let clear_count = old_count.max(new_count);
+        let clear_count = previous_line_count.max(self.line_count);
         for i in 0..clear_count {
             let _ = term.clear_line();
             if i + 1 < clear_count {
                 let _ = term.move_cursor_down(1);
             }
         }
-        // Return cursor to the start of this component's region.
         if clear_count > 1 {
             let _ = term.move_cursor_up(clear_count - 1);
         }
 
-        // Re-render the component from the top of its region.
-        // print!("{}", new_rendered);
-        let _ = term.write_line(new_rendered);
-
-        // Always move to the line below this component before restoring the
-        // original bottom position. Without this, a non-wrapping line leaves
-        // the cursor at end-of-line and the next rewrite moves up too far.
-        let _ = term.move_cursor_down(1);
-
+        self.write_to(term);
         if lines_below > 0 {
             let _ = term.move_cursor_down(lines_below);
         }
+    }
+}
 
-        new_count
+#[derive(Debug, Clone)]
+struct RenderedBlock {
+    event: RenderedLine,
+    details: Vec<RenderedLine>,
+}
+
+impl RenderedBlock {
+    fn write_to(&self, term: &Term) {
+        self.event.write_to(term);
+        for detail in &self.details {
+            detail.write_to(term);
+        }
+    }
+
+    fn detail_lines_total(&self) -> usize {
+        self.details.iter().map(|detail| detail.line_count).sum()
+    }
+
+    fn detail_lines_below(&self, idx: usize) -> usize {
+        self.details
+            .iter()
+            .skip(idx + 1)
+            .map(|detail| detail.line_count)
+            .sum()
     }
 }
 
@@ -131,7 +104,6 @@ struct EventLine {
 }
 
 impl EventLine {
-    #[allow(dead_code)]
     fn new(
         tag: &str,
         detail: &str,
@@ -148,15 +120,19 @@ impl EventLine {
         }
     }
 
-    /// Add a repeat summary to the event line.
-    fn with_repeat_summary(
+    fn render(&self, term_width: usize) -> RenderedLine {
+        RenderedLine::new(self.render_without_repeat(), term_width)
+    }
+
+    fn render_repeated(
         &self,
+        term_width: usize,
         repeat_count: usize,
         first_frame: u64,
         last_frame: u64,
         first_ts: Duration,
         last_ts: Duration,
-    ) -> String {
+    ) -> RenderedLine {
         let mut base = self.render_without_repeat();
         let repeat_suffix = format!(
             " (×{}, #{}-#{}, {:.3}s-{:.3}s)",
@@ -167,7 +143,7 @@ impl EventLine {
             last_ts.as_secs_f64()
         );
         base.push_str(&style(&repeat_suffix).color256(244).to_string());
-        base
+        RenderedLine::new(base, term_width)
     }
 
     /// Render without any repeat summary.
@@ -207,21 +183,6 @@ impl EventLine {
     }
 }
 
-impl LineComponent for EventLine {
-    fn render(&self, _term_width: usize) -> String {
-        self.render_without_repeat()
-    }
-
-    fn line_count(&self, term_width: usize) -> usize {
-        let text = self.render_without_repeat();
-        count_lines_with_wrapping(&text, term_width)
-    }
-
-    fn signature_key(&self) -> String {
-        format!("event:{}:{}", self.tag, self.detail)
-    }
-}
-
 /// A detail line component (child of an event, with tree branch).
 #[derive(Debug, Clone)]
 struct DetailLine {
@@ -234,14 +195,11 @@ impl DetailLine {
         DetailLine { content, dimmed }
     }
 
-    /// Update the content of this detail line.
-    #[allow(dead_code)]
     fn update_content(&mut self, new_content: String) {
         self.content = new_content;
     }
 
-    /// Render this detail line with the appropriate tree branch.
-    fn render_with_branch(&self, is_last: bool, is_only: bool, term_width: usize) -> String {
+    fn render_with_branch(&self, is_last: bool, is_only: bool, term_width: usize) -> RenderedLine {
         let branch = if is_only || is_last {
             "└─"
         } else {
@@ -255,89 +213,46 @@ impl DetailLine {
         } else {
             self.content.clone()
         };
-        let line = format!("{} {}", prefix, content);
-
-        line
-    }
-}
-
-impl LineComponent for DetailLine {
-    fn render(&self, term_width: usize) -> String {
-        // Default rendering (used when we don't know the branch position yet)
-        self.render_with_branch(true, true, term_width)
-    }
-
-    fn line_count(&self, term_width: usize) -> usize {
-        let rendered = self.render(term_width);
-        count_lines_with_wrapping(&rendered, term_width)
-    }
-
-    fn signature_key(&self) -> String {
-        format!("detail:{}", self.content)
+        RenderedLine::new(format!("{} {}", prefix, content), term_width)
     }
 }
 
 /// An output block: event line + optional detail lines (tree structure).
 #[derive(Debug, Clone)]
 struct OutputBlock {
+    key: String,
     event: EventLine,
     details: Vec<DetailLine>,
 }
 
 impl OutputBlock {
-    #[allow(dead_code)]
-    fn new(event: EventLine) -> Self {
+    fn new(key: String, event: EventLine) -> Self {
         OutputBlock {
+            key,
             event,
             details: Vec::new(),
         }
     }
 
-    /// Add a detail line as a child.
-    #[allow(dead_code)]
     fn add_detail(&mut self, detail: DetailLine) {
         self.details.push(detail);
     }
 
-    /// Update an existing detail line or add if not found.
-    #[allow(dead_code)]
-    fn update_or_add_detail(&mut self, index: usize, new_detail: DetailLine) {
-        if index < self.details.len() {
-            self.details[index] = new_detail;
-        } else {
-            self.details.push(new_detail);
-        }
-    }
-
-    /// Calculate total lines for this block (event + all details).
-    #[allow(dead_code)]
-    fn total_lines(&self, term_width: usize) -> usize {
-        let event_lines = self.event.line_count(term_width);
-        let detail_lines: usize = self.details.iter().map(|d| d.line_count(term_width)).sum();
-        event_lines + detail_lines
-    }
-
-    /// Render the entire block (event + details as children).
-    fn render_block(&self, term_width: usize) -> Vec<String> {
-        let mut lines = vec![self.event.render(term_width)];
+    fn render(&self, term_width: usize) -> RenderedBlock {
+        let mut details = Vec::with_capacity(self.details.len());
 
         let detail_count = self.details.len();
         for (idx, detail) in self.details.iter().enumerate() {
             let is_last = idx + 1 == detail_count;
             let is_only = detail_count == 1;
-            let line = detail.render_with_branch(is_last, is_only, term_width);
-            lines.push(line);
+            details.push(detail.render_with_branch(is_last, is_only, term_width));
         }
 
-        lines
+        RenderedBlock {
+            event: self.event.render(term_width),
+            details,
+        }
     }
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-struct DetailLineComponent {
-    content: String,
-    dimmed: bool,
 }
 
 /// Calculate how many terminal lines a string occupies with wrapping.
@@ -363,8 +278,8 @@ pub struct ErrorFormatter {
     term: Term,
     /// The last displayed output block (event + detail lines).
     last_block: Option<OutputBlock>,
-    /// The signature key of the current block (for deduplication).
-    last_event_key: Option<String>,
+    /// Cached rendered form of the last displayed block.
+    last_rendered_block: Option<RenderedBlock>,
     /// How many consecutive times the current event has been displayed.
     repeat_count: usize,
     /// Frame number of the first occurrence of the current repeated event.
@@ -375,12 +290,6 @@ pub struct ErrorFormatter {
     repeat_last_frame: u64,
     /// Timestamp of the most recent occurrence.
     repeat_last_ts: Duration,
-    /// Number of terminal lines occupied by the last rendered block.
-    last_printed_lines: usize,
-    /// Terminal lines occupied exclusively by the event line of the last block.
-    last_event_lines: usize,
-    /// Terminal lines occupied by each detail line of the last block (one entry per detail).
-    last_detail_lines: Vec<usize>,
     /// repeat_count value at which we last performed an overwrite (for throttling).
     last_overwrite_at: usize,
     /// Minimum number of new repeats required before we perform an overwrite.
@@ -401,15 +310,12 @@ impl ErrorFormatter {
             verbose: VerboseLevel::from_u8(verbose_level),
             term: Term::stdout(),
             last_block: None,
-            last_event_key: None,
+            last_rendered_block: None,
             repeat_count: 0,
             repeat_first_frame: 0,
             repeat_first_ts: Duration::ZERO,
             repeat_last_frame: 0,
             repeat_last_ts: Duration::ZERO,
-            last_printed_lines: 0,
-            last_event_lines: 0,
-            last_detail_lines: Vec::new(),
             last_overwrite_at: 0,
             overwrite_interval: 10,
             last_esm_error: false,
@@ -509,7 +415,7 @@ impl ErrorFormatter {
             Some(timestamp),
             Color::Red,
         );
-        self.emit_output_block(key, event);
+        self.emit_output_block(OutputBlock::new(key, event));
     }
 
     fn emit_device_error(&mut self, error: &ECDeviceError, correlations: &[ErrorCorrelation]) {
@@ -517,11 +423,9 @@ impl ErrorFormatter {
         // (it will be re-set below if this error is itself an ESM error)
         self.clear_esm_tracking();
 
-        let (key, event, frame, ts, corr, esm_info): (
+        let (key, event, corr, esm_info): (
             String,
             EventLine,
-            u64,
-            Duration,
             Option<WkcErrorDetail>,
             Option<(SubdeviceIdentifier, Option<u16>)>,
         ) = match error {
@@ -544,7 +448,7 @@ impl ErrorFormatter {
                     Some(*timestamp),
                     Color::Yellow,
                 );
-                (key, event, *packet_number, *timestamp, None, None)
+                (key, event, None, None)
             }
             ECDeviceError::InvalidConfiguredAddress {
                 packet_number,
@@ -561,7 +465,7 @@ impl ErrorFormatter {
                     Some(*timestamp),
                     Color::Yellow,
                 );
-                (key, event, *packet_number, *timestamp, None, None)
+                (key, event, None, None)
             }
             ECDeviceError::InvalidWkc(d) => {
                 let sub = d
@@ -598,7 +502,7 @@ impl ErrorFormatter {
                     Some(d.timestamp),
                     Color::Red,
                 );
-                (key, event, d.packet_number, d.timestamp, None, None)
+                (key, event, None, None)
             }
             ECDeviceError::ESMError(d) => {
                 let esm_short = Self::esm_error_short(&d.error);
@@ -618,10 +522,10 @@ impl ErrorFormatter {
                 );
                 let esm_info = Some((d.subdevice_id, d.al_status_code));
 
-                (key, event, d.packet_number, d.timestamp, corr, esm_info)
+                (key, event, corr, esm_info)
             }
         };
-        self.emit_output_block_with_details(key, event, frame, ts, corr, esm_info, error);
+        self.emit_output_block_with_details(OutputBlock::new(key, event), corr, esm_info, error);
     }
 
     fn emit_state_transition(&mut self, tr: &StateTransition) {
@@ -641,33 +545,23 @@ impl ErrorFormatter {
             Some(tr.timestamp),
             Color::Cyan,
         );
-        self.emit_output_block(key, event);
+        self.emit_output_block(OutputBlock::new(key, event));
     }
 
     // ─── Core component logic ───
 
-    /// Emit an output block (event line only).
-    fn emit_output_block(&mut self, _key: String, event: EventLine) {
-        let block = OutputBlock::new(event);
+    fn emit_output_block(&mut self, block: OutputBlock) {
         self.emit_output_block_internal(block);
     }
 
-    /// Emit an output block with detail lines (for device errors).
     fn emit_output_block_with_details(
         &mut self,
-        _key: String,
-        event: EventLine,
-        _frame: u64,
-        _ts: Duration,
+        mut block: OutputBlock,
         corr: Option<WkcErrorDetail>,
         esm_info: Option<(SubdeviceIdentifier, Option<u16>)>,
         error: &ECDeviceError,
     ) {
-        let mut block = OutputBlock::new(event);
-
-        // Print detail lines only for the first occurrence (not during repeats).
-        if self.repeat_count <= 1 {
-            // Add correlation detail if present
+        if !self.is_same_event(&block) {
             if let Some(ref c) = corr {
                 let sub = c
                     .subdevice_id
@@ -689,17 +583,13 @@ impl ErrorFormatter {
                     Some(c.timestamp),
                     Color::Red,
                 );
-                let wkc_rendered = wkc_line.render_without_repeat();
-                block.add_detail(DetailLine::new(wkc_rendered, false));
+                block.add_detail(DetailLine::new(wkc_line.render_without_repeat(), false));
             }
 
-            // Add diagnosis if detailed mode
             if self.verbose >= VerboseLevel::Detailed {
-                let diagnosis = error.diagnosis();
-                block.add_detail(DetailLine::new(diagnosis, true));
+                block.add_detail(DetailLine::new(error.diagnosis(), true));
             }
 
-            // Add AL Status Code line for ESM errors in detailed mode
             if self.verbose >= VerboseLevel::Detailed {
                 if let Some((subdevice_id, al_code)) = esm_info {
                     self.last_esm_error = true;
@@ -719,22 +609,13 @@ impl ErrorFormatter {
         self.emit_output_block_internal(block);
     }
 
-    /// Internal helper to emit a block with repeat handling.
     fn emit_output_block_internal(&mut self, block: OutputBlock) {
         let term_width = self.terminal_width();
-        let event_key = block.event.signature_key();
-
-        // Check if this is a repeat of the last event
-        if let Some(ref last_key) = self.last_event_key
-            && last_key == &event_key
-        {
-            // Same event repeating — increment counter.
+        if self.is_same_event(&block) {
             self.repeat_count += 1;
             self.repeat_last_frame = block.event.frame.unwrap_or(0);
             self.repeat_last_ts = block.event.timestamp.unwrap_or(Duration::ZERO);
 
-            // Throttle: only overwrite the terminal at most once per `overwrite_interval`
-            // repeats to avoid flickering from excessive cursor movement.
             let due = self.repeat_count - self.last_overwrite_at >= self.overwrite_interval;
             if due {
                 self.overwrite_repeat_block();
@@ -743,8 +624,6 @@ impl ErrorFormatter {
             return;
         }
 
-        // Different event — output new block.
-        self.last_event_key = Some(event_key);
         self.repeat_count = 1;
         self.last_overwrite_at = 0;
         self.repeat_first_frame = block.event.frame.unwrap_or(0);
@@ -752,105 +631,79 @@ impl ErrorFormatter {
         self.repeat_last_frame = self.repeat_first_frame;
         self.repeat_last_ts = self.repeat_first_ts;
 
-        // Track per-component line counts so we can do targeted rewrites later.
-        self.last_event_lines = block.event.line_count(term_width);
-        self.last_detail_lines = block
-            .details
-            .iter()
-            .map(|d| d.line_count(term_width))
-            .collect();
-
-        // Render and print the block
-        let lines = block.render_block(term_width);
-        let line_count = lines.len();
-        for line in lines {
-            let _ = self.term.write_line(&line);
-        }
-
+        let rendered = block.render(term_width);
+        rendered.write_to(&self.term);
         self.last_block = Some(block);
-        self.last_printed_lines = line_count;
+        self.last_rendered_block = Some(rendered);
     }
 
-    /// Rewrite the last output block's event line to show repeat count.
-    ///
-    /// If the block has no detail lines, the event line is simply rewritten in
-    /// place.  When detail lines are present they are left untouched on the
-    /// terminal — only the event line above them is updated via cursor movement,
-    /// avoiding a full redraw and the flicker it causes.
-    fn overwrite_repeat_block(&mut self) {
-        if let Some(ref block) = self.last_block.clone() {
-            let term_width = self.terminal_width();
+    fn overwrite_repeat_block(&mut self) -> Option<()> {
+        let term_width = self.terminal_width();
+        let block = self.last_block.as_ref()?;
+        let rendered_block = self.last_rendered_block.as_mut()?;
 
-            // Build the updated event line.
-            let repeated_event_line = block.event.with_repeat_summary(
-                self.repeat_count,
-                self.repeat_first_frame,
-                self.repeat_last_frame,
-                self.repeat_first_ts,
-                self.repeat_last_ts,
-            );
+        let rendered_event = block.event.render_repeated(
+            term_width,
+            self.repeat_count,
+            self.repeat_first_frame,
+            self.repeat_last_frame,
+            self.repeat_first_ts,
+            self.repeat_last_ts,
+        );
 
-            let detail_lines_total: usize = self.last_detail_lines.iter().sum();
+        let old_event_line_count = rendered_block.event.line_count;
+        let detail_lines_total = rendered_block.detail_lines_total();
 
-            // Use the event line's rewrite_in_place API to update just the event line, leaving detail lines untouched.
-            let new_event_lines = block.event.rewrite_in_place(
-                &repeated_event_line,
-                &self.term,
-                detail_lines_total,
-                term_width,
-            );
-            self.last_event_lines = new_event_lines;
-            self.last_printed_lines = new_event_lines + detail_lines_total;
-
-            let _ = self.term.flush();
+        if old_event_line_count == rendered_event.line_count {
+            // If the event line didn't change height, we can just rewrite it in place
+            rendered_event.rewrite_in_place(old_event_line_count, &self.term, detail_lines_total);
+            rendered_block.event = rendered_event;
+        } else {
+            // Otherwise, we need to rewrite the entire block to avoid messing up the detail lines
+            let _ = self
+                .term
+                .move_cursor_up(old_event_line_count + detail_lines_total);
+            rendered_block.event = rendered_event;
+            rendered_block.write_to(&self.term);
         }
+
+        let _ = self.term.flush();
+        Some(())
     }
 
-    /// Rewrite the AL Status Code detail line for the last ESM error.
     fn rewrite_al_status_code_detail(&mut self, code: u16) {
         if !self.last_esm_error {
             return;
         }
 
-        if let Some(ref mut block) = self.last_block.clone() {
-            if let Some(idx) = self.last_al_status_detail_index {
-                if idx < block.details.len() {
-                    let al_text = format!("AL Status Code: {}", format_al_status_code(code));
-                    let term_width = self.terminal_width();
-                    let detail_count = block.details.len();
-
-                    // `lines_below` for this detail = sum of line counts for all details after it.
-                    let lines_below_detail: usize =
-                        self.last_detail_lines.iter().skip(idx + 1).sum();
-
-                    // Determine the rendered form of the updated detail (with correct branch).
-                    let is_last = idx + 1 == detail_count;
-                    let is_only = detail_count == 1;
-                    block.details[idx].update_content(al_text);
-                    let new_rendered =
-                        block.details[idx].render_with_branch(is_last, is_only, term_width);
-
-                    // Use the DetailLine's rewrite_in_place API.
-                    let new_line_count = block.details[idx].rewrite_in_place(
-                        &new_rendered,
-                        &self.term,
-                        lines_below_detail,
-                        term_width,
-                    );
-
-                    // Update tracked counts.
-                    if idx < self.last_detail_lines.len() {
-                        self.last_detail_lines[idx] = new_line_count;
-                    }
-                    let detail_lines_total: usize = self.last_detail_lines.iter().sum();
-                    self.last_printed_lines = self.last_event_lines + detail_lines_total;
-
-                    let _ = self.term.flush();
-                    self.last_esm_al_status_code = Some(code);
-                    self.last_block = Some(block.clone());
-                }
-            }
+        let Some(idx) = self.last_al_status_detail_index else {
+            return;
+        };
+        let term_width = self.terminal_width();
+        let Some(block) = self.last_block.as_mut() else {
+            return;
+        };
+        let Some(rendered_block) = self.last_rendered_block.as_mut() else {
+            return;
+        };
+        if idx >= block.details.len() || idx >= rendered_block.details.len() {
+            return;
         }
+
+        let al_text = format!("AL Status Code: {}", format_al_status_code(code));
+        let detail_count = block.details.len();
+        let is_last = idx + 1 == detail_count;
+        let is_only = detail_count == 1;
+
+        block.details[idx].update_content(al_text);
+        let rendered_detail = block.details[idx].render_with_branch(is_last, is_only, term_width);
+        let lines_below = rendered_block.detail_lines_below(idx);
+        let previous_line_count = rendered_block.details[idx].line_count;
+        rendered_detail.rewrite_in_place(previous_line_count, &self.term, lines_below);
+        rendered_block.details[idx] = rendered_detail;
+
+        let _ = self.term.flush();
+        self.last_esm_al_status_code = Some(code);
     }
 
     /// Get the current terminal width, with a safe fallback.
@@ -861,17 +714,13 @@ impl ErrorFormatter {
 
     /// Flush any pending repeat state. Called before printing non-event output.
     fn flush_repeat(&mut self) {
-        // If the repeat count advanced past the last overwrite, emit the final state now
-        // so the terminal always shows the correct final repeat count.
         if self.repeat_count > 1 && self.repeat_count != self.last_overwrite_at {
             self.overwrite_repeat_block();
         }
-        self.last_event_key = None;
+        self.last_block = None;
+        self.last_rendered_block = None;
         self.repeat_count = 0;
         self.last_overwrite_at = 0;
-        self.last_printed_lines = 0;
-        self.last_event_lines = 0;
-        self.last_detail_lines.clear();
         self.clear_esm_tracking();
     }
 
@@ -903,6 +752,11 @@ impl ErrorFormatter {
     }
 
     // ─── Data helpers ───
+    fn is_same_event(&self, block: &OutputBlock) -> bool {
+        self.last_block
+            .as_ref()
+            .map_or(false, |lb| lb.key == block.key)
+    }
 
     fn wkc_cause_short(expected: u16, actual: u16) -> &'static str {
         if actual == 0 {
