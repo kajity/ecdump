@@ -10,12 +10,13 @@
 - `libpcap` development headers (for Linux/macOS) or Npcap/WinPcap (for Windows).
   - Ubuntu/Debian: `sudo apt install libpcap-dev`
   - macOS: `brew install libpcap`
+  - Windows: Install Npcap from https://nmap.org/npcap/ and place `Packet.lib` (available from the Npcap SDK) in your system's library path. For more details, refer to the documentation of crate [pnet](https://crates.io/crates/pnet#user-content-windows)
 
 ### Build from Source
 Clone the repository and build the project using Cargo:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/kajity/ecdump.git
 cd ecdump
 cargo build --release
 ```
