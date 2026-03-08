@@ -5,10 +5,12 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use bytes::BytesMut;
+use crossbeam_channel::{Receiver as CbReceiver, Sender as CbSender, TryRecvError};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
     MouseButton, MouseEventKind,
@@ -19,11 +21,12 @@ use crossterm::terminal::{
 use crossterm::{execute, terminal};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::Rect;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Wrap};
+use tokio::runtime::Builder;
+use tokio::sync::{mpsc, watch};
 
 use crate::analysis_event::{
     AnalysisEvent, AnalysisEventKind, from_al_status_update, from_ec_error, from_state_transition,
@@ -34,6 +37,36 @@ use crate::startup::PcapFileConfig;
 use ecdump::ec_packet;
 
 const MAX_EVENTS: usize = 10_000;
+const UI_EVENT_BUFFER: usize = 4096;
+
+#[derive(Debug, Clone)]
+struct PlaybackControl {
+    playing: bool,
+    step_seq: u64,
+    shutdown: bool,
+}
+
+#[derive(Debug)]
+enum UiEvent {
+    Analysis(AnalysisEvent),
+    Progress { processed_frames: u64 },
+    SourceFinished { total_frames: u64 },
+}
+
+#[derive(Debug)]
+enum UiCommand {
+    Quit,
+    TogglePlay,
+    Step,
+    SelectNext,
+    SelectPrev,
+    SelectFirst,
+    SelectLast,
+    SelectAt { col: u16, row: u16 },
+    ScrollUp,
+    ScrollDown,
+    Redraw,
+}
 
 pub fn run_interactive_file_mode(
     file: &PcapFileConfig,
@@ -58,7 +91,7 @@ pub fn run_interactive_file_mode(
         .transpose()?;
 
     let (_abort_tx, abort_rx) = crossbeam_channel::bounded::<bool>(0);
-    let (handle, tx_buffer, rx_data) =
+    let (source_handle, tx_buffer, rx_data) =
         packet_source::start_read_pcap(file_in, file_out, file.is_pcapng, abort_rx, time_sync)
             .with_context(|| format!("Failed to start reading pcap file: {}", &file.file_path))?;
 
@@ -71,136 +104,316 @@ pub fn run_interactive_file_mode(
         .context("Error setting Ctrl-C handler")?;
     }
 
+    let runtime = Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("Failed to create tokio runtime")?;
+
+    runtime.block_on(run_interactive_async(
+        file.file_path.clone(),
+        ctrlc_requested,
+        source_handle,
+        tx_buffer,
+        rx_data,
+    ))
+}
+
+async fn run_interactive_async(
+    source_name: String,
+    ctrlc_requested: Arc<AtomicBool>,
+    source_handle: Option<JoinHandle<()>>,
+    tx_buffer: CbSender<BytesMut>,
+    rx_data: CbReceiver<CapturedData>,
+) -> Result<()> {
     let mut tui = TuiSession::new()?;
-    let mut app = InteractiveApp::new(file.file_path.clone());
-    let mut device_manager = DeviceManager::new();
-    let mut needs_redraw = true;
+    let mut app = InteractiveApp::new(source_name);
+
+    let (ui_event_tx, mut ui_event_rx) = mpsc::channel::<UiEvent>(UI_EVENT_BUFFER);
+    let (cmd_tx, mut cmd_rx) = mpsc::unbounded_channel::<UiCommand>();
+    let (control_tx, control_rx) = watch::channel(PlaybackControl {
+        playing: true,
+        step_seq: 0,
+        shutdown: false,
+    });
+
+    let input_shutdown = Arc::new(AtomicBool::new(false));
+    let input_shutdown_task = Arc::clone(&input_shutdown);
+    let input_task = tokio::task::spawn_blocking(move || {
+        run_input_task(cmd_tx, input_shutdown_task);
+    });
+
+    let packet_task = tokio::task::spawn_blocking(move || {
+        run_packet_task(rx_data, tx_buffer, control_rx, ui_event_tx);
+    });
+
+    let mut control_state = control_tx.borrow().clone();
+    app.draw(&mut tui.terminal)?;
 
     loop {
-        if ctrlc_requested.load(Ordering::SeqCst) || app.should_quit {
+        if ctrlc_requested.load(Ordering::SeqCst) {
+            app.should_quit = true;
+        }
+
+        if app.should_quit {
             break;
         }
 
-        let mut progressed = false;
+        tokio::select! {
+            cmd = cmd_rx.recv() => {
+                match cmd {
+                    Some(cmd) => {
+                        if apply_ui_command(&mut app, &mut control_state, cmd, &mut tui.terminal)? {
+                            break;
+                        }
+                        let _ = control_tx.send(control_state.clone());
+                        app.draw(&mut tui.terminal)?;
+                    }
+                    None => continue,
+                }
+            }
+            event = ui_event_rx.recv() => {
+                match event {
+                    Some(event) => {
+                        apply_ui_event(&mut app, event);
+                        app.draw(&mut tui.terminal)?;
+                    }
+                    None => break,
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {
+                // Keep loop responsive to Ctrl-C and shutdown checks.
+            }
+        }
+    }
 
-        let should_process_packet = !app.finished && (app.playing || app.step_requested);
-        if should_process_packet {
+    control_state.shutdown = true;
+    let _ = control_tx.send(control_state);
+    input_shutdown.store(true, Ordering::SeqCst);
+
+    let _ = input_task.await;
+    let _ = packet_task.await;
+
+    if let Some(handle) = source_handle {
+        let _ = handle.join();
+    }
+
+    Ok(())
+}
+
+fn run_input_task(cmd_tx: mpsc::UnboundedSender<UiCommand>, shutdown: Arc<AtomicBool>) {
+    while !shutdown.load(Ordering::SeqCst) {
+        match event::poll(Duration::from_millis(20)) {
+            Ok(true) => match event::read() {
+                Ok(Event::Key(key)) if key.kind == KeyEventKind::Press => {
+                    if key.modifiers.contains(KeyModifiers::CONTROL)
+                        && key.code == KeyCode::Char('c')
+                    {
+                        let _ = cmd_tx.send(UiCommand::Quit);
+                        continue;
+                    }
+
+                    let cmd = match key.code {
+                        KeyCode::Char('q') => Some(UiCommand::Quit),
+                        KeyCode::Char(' ') => Some(UiCommand::TogglePlay),
+                        KeyCode::Char('n') => Some(UiCommand::Step),
+                        KeyCode::Char('j') | KeyCode::Down => Some(UiCommand::SelectNext),
+                        KeyCode::Char('k') | KeyCode::Up => Some(UiCommand::SelectPrev),
+                        KeyCode::Char('g') => Some(UiCommand::SelectFirst),
+                        KeyCode::Char('G') => Some(UiCommand::SelectLast),
+                        _ => None,
+                    };
+                    if let Some(cmd) = cmd {
+                        let _ = cmd_tx.send(cmd);
+                    }
+                }
+                Ok(Event::Mouse(mouse)) => {
+                    let cmd = match mouse.kind {
+                        MouseEventKind::Down(MouseButton::Left) => Some(UiCommand::SelectAt {
+                            col: mouse.column,
+                            row: mouse.row,
+                        }),
+                        MouseEventKind::ScrollUp => Some(UiCommand::ScrollUp),
+                        MouseEventKind::ScrollDown => Some(UiCommand::ScrollDown),
+                        _ => None,
+                    };
+                    if let Some(cmd) = cmd {
+                        let _ = cmd_tx.send(cmd);
+                    }
+                }
+                Ok(Event::Resize(_, _)) => {
+                    let _ = cmd_tx.send(UiCommand::Redraw);
+                }
+                Ok(_) => {}
+                Err(_) => std::thread::sleep(Duration::from_millis(1)),
+            },
+            Ok(false) => std::thread::sleep(Duration::from_millis(1)),
+            Err(_) => std::thread::sleep(Duration::from_millis(5)),
+        }
+    }
+}
+
+fn run_packet_task(
+    rx_data: CbReceiver<CapturedData>,
+    tx_buffer: CbSender<BytesMut>,
+    control_rx: watch::Receiver<PlaybackControl>,
+    ui_event_tx: mpsc::Sender<UiEvent>,
+) {
+    let mut device_manager = DeviceManager::new();
+    let mut last_step_seq = 0_u64;
+
+    loop {
+        let control = control_rx.borrow().clone();
+        if control.shutdown {
+            break;
+        }
+
+        let stepped = !control.playing && control.step_seq > last_step_seq;
+        if !control.playing && !stepped {
+            std::thread::sleep(Duration::from_millis(1));
+            continue;
+        }
+
+        let mut processed_any = false;
+        let mut processed_in_this_turn = 0usize;
+
+        while processed_in_this_turn < 256 {
             match rx_data.try_recv() {
                 Ok(CapturedData {
                     data: packet,
                     timestamp,
                     from_main,
                 }) => {
-                    app.step_requested = false;
-                    progressed = true;
+                    processed_any = true;
+                    processed_in_this_turn += 1;
 
                     let ethercat_packet = match ec_packet::ECFrame::new(packet.as_ref()) {
                         Some(pkt) => pkt,
-                        None => {
-                            continue;
-                        }
+                        None => continue,
                     };
 
                     let result =
                         device_manager.analyze_packet(&ethercat_packet, timestamp, from_main);
-                    app.processed_frames = device_manager.get_frame_count();
-
                     tx_buffer.send(BytesMut::from(packet)).ok();
 
-                    let transitions = device_manager.take_state_transitions();
-                    for tr in transitions {
-                        app.push_event(from_state_transition(&tr));
+                    for tr in device_manager.take_state_transitions() {
+                        if ui_event_tx
+                            .blocking_send(UiEvent::Analysis(from_state_transition(&tr)))
+                            .is_err()
+                        {
+                            return;
+                        }
                     }
 
                     let correlations = device_manager.take_pending_correlations();
                     if let Err(error) = result {
-                        for event in from_ec_error(error, &correlations) {
-                            app.push_event(event);
+                        for ev in from_ec_error(error, &correlations) {
+                            if ui_event_tx.blocking_send(UiEvent::Analysis(ev)).is_err() {
+                                return;
+                            }
                         }
                     }
 
-                    let al_updates = device_manager.check_al_status_code_updates();
-                    for update in al_updates {
-                        app.push_event(from_al_status_update(
-                            app.processed_frames,
+                    for update in device_manager.check_al_status_code_updates() {
+                        let ev = from_al_status_update(
+                            device_manager.get_frame_count(),
                             timestamp,
                             &update,
-                        ));
+                        );
+                        if ui_event_tx.blocking_send(UiEvent::Analysis(ev)).is_err() {
+                            return;
+                        }
                     }
-                }
-                Err(crossbeam_channel::TryRecvError::Empty) => {}
-                Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                    app.finished = true;
-                    app.total_frames = Some(app.processed_frames);
-                    progressed = true;
-                }
-            }
-        }
 
-        if event::poll(Duration::from_millis(0))? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => {
-                    if key.modifiers.contains(KeyModifiers::CONTROL)
-                        && key.code == KeyCode::Char('c')
-                    {
+                    if stepped {
+                        let _ = ui_event_tx.blocking_send(UiEvent::Progress {
+                            processed_frames: device_manager.get_frame_count(),
+                        });
+                        last_step_seq = control.step_seq;
                         break;
                     }
 
-                    match key.code {
-                        KeyCode::Char('q') => app.should_quit = true,
-                        KeyCode::Char(' ') => app.playing = !app.playing,
-                        KeyCode::Char('n') => {
-                            if !app.playing {
-                                app.step_requested = true;
-                            }
-                        }
-                        KeyCode::Char('j') | KeyCode::Down => app.select_next(),
-                        KeyCode::Char('k') | KeyCode::Up => app.select_prev(),
-                        KeyCode::Char('g') => app.select_first(),
-                        KeyCode::Char('G') => app.select_last(),
-                        _ => {}
+                    if control.playing && device_manager.get_frame_count().is_multiple_of(64) {
+                        let _ = ui_event_tx.blocking_send(UiEvent::Progress {
+                            processed_frames: device_manager.get_frame_count(),
+                        });
                     }
-                    progressed = true;
                 }
-                Event::Mouse(mouse) => {
-                    match mouse.kind {
-                        MouseEventKind::Down(MouseButton::Left) => {
-                            let size = tui.terminal.size()?;
-                            app.select_by_mouse(
-                                mouse.column,
-                                mouse.row,
-                                Rect::new(0, 0, size.width, size.height),
-                            );
-                        }
-                        MouseEventKind::ScrollDown => app.select_next(),
-                        MouseEventKind::ScrollUp => app.select_prev(),
-                        _ => {}
-                    }
-                    progressed = true;
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Disconnected) => {
+                    let _ = ui_event_tx.blocking_send(UiEvent::SourceFinished {
+                        total_frames: device_manager.get_frame_count(),
+                    });
+                    return;
                 }
-                Event::Resize(_, _) => progressed = true,
-                _ => {}
             }
         }
 
-        if needs_redraw || progressed {
-            app.draw(&mut tui.terminal)?;
-            needs_redraw = false;
-        }
-
-        if !progressed {
+        if !processed_any {
             std::thread::sleep(Duration::from_millis(1));
         }
     }
+}
 
-    drop(rx_data);
-    drop(tx_buffer);
-
-    if let Some(handle) = handle {
-        let _ = handle.join();
+fn apply_ui_command(
+    app: &mut InteractiveApp,
+    control: &mut PlaybackControl,
+    cmd: UiCommand,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<bool> {
+    match cmd {
+        UiCommand::Quit => {
+            app.should_quit = true;
+            Ok(true)
+        }
+        UiCommand::TogglePlay => {
+            control.playing = !control.playing;
+            app.playing = control.playing;
+            Ok(false)
+        }
+        UiCommand::Step => {
+            if !control.playing {
+                control.step_seq = control.step_seq.saturating_add(1);
+            }
+            Ok(false)
+        }
+        UiCommand::SelectNext | UiCommand::ScrollDown => {
+            app.select_next();
+            Ok(false)
+        }
+        UiCommand::SelectPrev | UiCommand::ScrollUp => {
+            app.select_prev();
+            Ok(false)
+        }
+        UiCommand::SelectFirst => {
+            app.select_first();
+            Ok(false)
+        }
+        UiCommand::SelectLast => {
+            app.select_last();
+            Ok(false)
+        }
+        UiCommand::SelectAt { col, row } => {
+            let size = terminal.size()?;
+            app.select_by_mouse(col, row, Rect::new(0, 0, size.width, size.height));
+            Ok(false)
+        }
+        UiCommand::Redraw => Ok(false),
     }
+}
 
-    Ok(())
+fn apply_ui_event(app: &mut InteractiveApp, event: UiEvent) {
+    match event {
+        UiEvent::Analysis(event) => app.push_event(event),
+        UiEvent::Progress { processed_frames } => {
+            app.processed_frames = app.processed_frames.max(processed_frames);
+        }
+        UiEvent::SourceFinished { total_frames } => {
+            app.finished = true;
+            app.playing = false;
+            app.processed_frames = app.processed_frames.max(total_frames);
+            app.total_frames = Some(total_frames);
+        }
+    }
 }
 
 struct InteractiveApp {
@@ -210,7 +423,6 @@ struct InteractiveApp {
     processed_frames: u64,
     total_frames: Option<u64>,
     playing: bool,
-    step_requested: bool,
     finished: bool,
     should_quit: bool,
     list_scroll: usize,
@@ -225,7 +437,6 @@ impl InteractiveApp {
             processed_frames: 0,
             total_frames: None,
             playing: true,
-            step_requested: false,
             finished: false,
             should_quit: false,
             list_scroll: 0,
@@ -233,6 +444,8 @@ impl InteractiveApp {
     }
 
     fn push_event(&mut self, event: AnalysisEvent) {
+        self.processed_frames = self.processed_frames.max(event.frame);
+
         if self.events.len() == MAX_EVENTS {
             self.events.pop_front();
             if self.selected > 0 {
@@ -332,11 +545,11 @@ impl InteractiveApp {
         let area = Rect::new(0, 0, size.width, size.height);
         let visible_rows = Self::events_rect(area).height.saturating_sub(2) as usize;
         self.sync_scroll(visible_rows);
+
         let start = self.list_scroll;
         let end = (start + visible_rows).min(self.events.len());
 
         terminal.draw(|frame| {
-            let area = frame.area();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
@@ -345,7 +558,7 @@ impl InteractiveApp {
                     Constraint::Length(7),
                     Constraint::Length(1),
                 ])
-                .split(area);
+                .split(frame.area());
 
             let state = if self.finished {
                 "Finished"
@@ -354,7 +567,6 @@ impl InteractiveApp {
             } else {
                 "Paused"
             };
-
             let total = self
                 .total_frames
                 .map(|n| n.to_string())
@@ -444,6 +656,7 @@ impl InteractiveApp {
             .style(Style::default().fg(Color::Gray));
             frame.render_widget(footer, chunks[3]);
         })?;
+
         Ok(())
     }
 }

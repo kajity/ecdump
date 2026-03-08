@@ -76,3 +76,6 @@ sudo ecdump -i eth0 -w output.pcap
 - `n`: Step one frame while paused
 - `j` / `k`: Move selection down/up
 - `g` / `G`: Jump to first/last event
+- Mouse: left-click to select event, wheel to move selection
+
+Interactive mode internally separates packet analysis, input handling, and rendering to reduce UI latency.
