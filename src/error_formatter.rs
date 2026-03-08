@@ -4,9 +4,9 @@ use std::time::Duration;
 use crate::analyzer::{
     AlStatusCodeUpdate, ECDeviceError, ECError, ErrorCorrelation, StateTransition, WkcErrorDetail,
 };
-use ecdump::ec_packet::ECPacketError;
-use ecdump::registers::format_al_status_code;
-use ecdump::subdevice::SubdeviceIdentifier;
+use crate::ec_packet::ECPacketError;
+use crate::registers::format_al_status_code;
+use crate::subdevice::SubdeviceIdentifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum VerboseLevel {
@@ -768,8 +768,8 @@ impl ErrorFormatter {
         }
     }
 
-    fn esm_error_short(error: &ecdump::subdevice::ESMError) -> String {
-        use ecdump::subdevice::ESMError;
+    fn esm_error_short(error: &crate::subdevice::ESMError) -> String {
+        use crate::subdevice::ESMError;
         match error {
             ESMError::IllegalTransition { to } => {
                 format!("illegal -> {}", to)
@@ -809,6 +809,11 @@ impl ErrorFormatter {
             })
             .map(|c| c.wkc_error)
     }
+
+    pub fn reset(&mut self) {
+        let mut new_formatter = ErrorFormatter::new(self.verbose as u8);
+        std::mem::swap(self, &mut new_formatter);
+    }
 }
 
 impl Drop for ErrorFormatter {
@@ -836,7 +841,7 @@ mod tests {
 
     #[test]
     fn test_esm_error_short() {
-        use ecdump::subdevice::{ECState, ESMError};
+        use crate::subdevice::{ECState, ESMError};
 
         let err = ESMError::BackwardTransition {
             from: ECState::Op,
@@ -860,8 +865,8 @@ mod tests {
     #[test]
     fn test_find_correlation_for_esm() {
         use crate::analyzer::{ESMErrorDetail, WkcErrorDetail};
-        use ecdump::ec_packet::ECCommands;
-        use ecdump::subdevice::{ECState, ESMError, SubdeviceIdentifier};
+        use crate::ec_packet::ECCommands;
+        use crate::subdevice::{ECState, ESMError, SubdeviceIdentifier};
 
         let wkc = WkcErrorDetail {
             packet_number: 10,

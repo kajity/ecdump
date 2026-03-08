@@ -58,6 +58,7 @@ pub struct ECFrameView<'a> {
 ///     have to be mapped to which local address space using the configuration information of the FMMUs.
 ///     Logical Addressing supports bit wise mapping. Logical Addressing is a powerful mechanism to reduce
 ///     the overhead of process data communication, thus it is typically used for accessing process data.
+#[allow(dead_code)]
 pub enum ECAddress {
     Position { adp: u16, ado: u16 }, // Auto Increment address, Broadcast
     Node { address: u16, offset: u16 }, // Configured Station Address/Configured Station Alias
@@ -99,6 +100,7 @@ impl<'a> ECDatagrams<'a> {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ECDatagram<'a> {
     command: ECCommand,
@@ -113,11 +115,13 @@ pub struct ECDatagram<'a> {
     wkc: u16,
 }
 
+#[allow(dead_code)]
 pub struct ECDatagramView<'a> {
     data: &'a mut [u8],
     data_len: usize,
 }
 
+#[allow(dead_code)]
 impl<'a> ECFrame<'a> {
     pub fn new(data: &'a [u8]) -> Option<ECFrame<'a>> {
         if data.len() < 2 {
@@ -169,6 +173,7 @@ impl<'a> ECFrame<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> ECDatagram<'a> {
     pub fn new(data: &'a [u8], total_length: u16) -> Result<Option<ECDatagram<'a>>, ECPacketError> {
         if total_length == 0 {
@@ -237,6 +242,7 @@ impl<'a> ECDatagram<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> ECFrameView<'a> {
     pub fn new(data: &'a mut [u8]) -> Option<ECFrameView<'a>> {
         if data.len() < 2 {
@@ -249,6 +255,7 @@ impl<'a> ECFrameView<'a> {
     }
 }
 
+#[allow(dead_code)]
 impl<'a> ECDatagramView<'a> {
     pub fn new(data: &'a mut [u8]) -> Option<ECDatagramView<'a>> {
         if data.len() < 10 {

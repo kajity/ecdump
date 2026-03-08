@@ -21,6 +21,7 @@ impl AlControl {
         Self { state, acknowledge }
     }
 
+    #[allow(dead_code)]
     pub fn try_from(al_control: u8) -> Option<Self> {
         let state = match al_control & 0x0F {
             0x01 => Ok(ECState::Init),

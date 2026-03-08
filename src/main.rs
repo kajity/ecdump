@@ -1,19 +1,22 @@
 mod analyzer;
+mod ec_packet;
 mod error_formatter;
 mod packet_source;
+mod registers;
 mod startup;
+mod subdevice;
 
 use anyhow::{Context, Result};
 use bytes::BytesMut;
 use console::style;
 use crossbeam_channel::{bounded, select};
-use ecdump::ec_packet;
 use error_formatter::ErrorFormatter;
 use log::{debug, error, warn};
 use packet_source::CapturedData;
 use startup::PcapSource;
 use std::fs::File;
 use std::io::BufWriter;
+use std::time::Duration;
 
 fn main() -> Result<()> {
     let config = startup::parse_args();
@@ -93,6 +96,8 @@ fn main() -> Result<()> {
     };
 
     let mut device_manager = analyzer::DeviceManager::new();
+    let reset_interval = Duration::from_secs_f64(config.reset_interval_sec);
+    let mut last_packet_timestamp: Option<Duration> = None;
 
     loop {
         if abort_rx.try_recv().is_ok() {
@@ -110,6 +115,22 @@ fn main() -> Result<()> {
                         timestamp,
                         from_main,
                     }) => {
+                        match last_packet_timestamp {
+                            Some(last_ts) => {
+                                if timestamp - last_ts > reset_interval {
+                                    debug!("No packets received for {:?}, resetting analyzer state", reset_interval);
+                                    error_formatter.print_summary(device_manager.get_frame_count());
+                                    device_manager.reset();
+                                    error_formatter.reset();
+                                }
+                                last_packet_timestamp = Some(timestamp);
+
+                            }
+                            None => {
+                                last_packet_timestamp = Some(timestamp);
+                            }
+                        }
+
                         let ethercat_packet = match ec_packet::ECFrame::new(packet.as_ref()) {
                             Some(pkt) => pkt,
                             None => {

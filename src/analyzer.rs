@@ -5,8 +5,8 @@ use std::time::Duration;
 use log::{debug, error, trace, warn};
 
 use crate::ec_packet::ECFrame;
-use ecdump::ec_packet::{ECCommand, ECCommands, ECDatagram, ECPacketError};
-use ecdump::subdevice::{self, ECState, ESMError, SubDevice, SubdeviceIdentifier};
+use crate::ec_packet::{ECCommand, ECCommands, ECDatagram, ECPacketError};
+use crate::subdevice::{self, ECState, ESMError, SubDevice, SubdeviceIdentifier};
 
 #[derive(Debug, Copy, Clone)]
 pub struct WkcErrorDetail {
@@ -547,6 +547,16 @@ impl DeviceManager {
     /// This drains the internal buffer; each correlation is returned only once.
     pub fn take_pending_correlations(&mut self) -> Vec<ErrorCorrelation> {
         std::mem::take(&mut self.pending_correlations)
+    }
+
+    // pub fn reset(self) -> Self {
+    //     drop(self);
+    //     debug!("Resetting DeviceManager state after inactivity timeout");
+    //     DeviceManager::new()
+    // }
+    pub fn reset(&mut self) {
+        let mut new_device_manager = DeviceManager::new();
+        std::mem::swap(self, &mut new_device_manager);
     }
 }
 

@@ -9,6 +9,7 @@ pub struct Config {
     pub pcap_source: PcapSource,
     pub output_file: Option<String>,
     pub time_sync: bool,
+    pub reset_interval_sec: f64,
 }
 
 pub enum PcapSource {
@@ -51,6 +52,10 @@ pub fn parse_args() -> Config {
         #[arg(short = 'T', default_value_t = false)]
         time_sync: bool,
 
+        /// Set the time interval in seconds for resetting analyzer state when no packets are received
+        #[arg(short = 't', long = "time", default_value_t = 2.0)]
+        reset_interval_sec: f64,
+
         #[arg(short, long, hide = true, action = clap::ArgAction::Count)]
         debug: u8,
     }
@@ -61,6 +66,15 @@ pub fn parse_args() -> Config {
         cmd.error(
             ErrorKind::ArgumentConflict,
             "Cannot specify both --file and --interface options at the same time",
+        )
+        .exit();
+    }
+
+    if args.reset_interval_sec < 1.0 {
+        let mut cmd = Cli::command();
+        cmd.error(
+            ErrorKind::InvalidValue,
+            "Reset interval must be at least 1 second",
         )
         .exit();
     }
@@ -82,6 +96,7 @@ pub fn parse_args() -> Config {
         pcap_source,
         output_file: args.write,
         time_sync: args.time_sync,
+        reset_interval_sec: args.reset_interval_sec,
     }
 }
 
